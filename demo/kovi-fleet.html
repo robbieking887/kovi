@@ -1,0 +1,677 @@
+<title>Kovi Fleet</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=Barlow+Semi+Condensed:wght@700&display=swap">
+<style>
+/* Layout: one column. Sticky bar with a Driver / Office switch. Driver side is big-tap steps; office side is a fleet board, alerts, drivers, checklist builder, billing.
+   Palette: road-sign blue, tarmac-ink neutrals, pass green / defect red / flag amber. The yellow reg plate is the signature object. */
+:root{
+  --bg:#e9edf1;--surface:#ffffff;--surface-2:#dfe5ec;--ink:#121a24;--ink-2:#4a5767;--line:#c9d1da;
+  --brand:#0a4a96;--brand-ink:#ffffff;
+  --ok:#17703a;--ok-bg:#d9f0e2;--bad:#bf2a1e;--bad-bg:#fadfdb;--warn:#8a5600;--warn-bg:#fae9c0;
+  --font-body:'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --font-display:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1017;--surface:#141c26;--surface-2:#1d2733;--ink:#e9eef4;--ink-2:#9aa8b8;--line:#2b3746;
+    --brand:#6db0ff;--brand-ink:#04101f;
+    --ok:#55c983;--ok-bg:#113120;--bad:#ff7568;--bad-bg:#3b1612;--warn:#f2b73c;--warn-bg:#352709;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1017;--surface:#141c26;--surface-2:#1d2733;--ink:#e9eef4;--ink-2:#9aa8b8;--line:#2b3746;
+  --brand:#6db0ff;--brand-ink:#04101f;
+  --ok:#55c983;--ok-bg:#113120;--bad:#ff7568;--bad-bg:#3b1612;--warn:#f2b73c;--warn-bg:#352709;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 var(--font-body);-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;margin:0}
+p{margin:0}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+.in{max-width:680px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.page{padding-block:18px 32px;display:flex;flex-direction:column;gap:18px}
+.bar{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:9}
+.barin{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:58px;flex-wrap:wrap;padding-block:6px}
+.wm{font-family:var(--font-display);font-weight:700;font-size:30px;letter-spacing:.14em;line-height:1}
+.left{display:flex;align-items:center;gap:10px}
+.back{background:none;border:0;padding:12px 0;min-height:44px;font-weight:600;color:var(--brand);font-size:16px}
+.prog{height:4px;background:var(--surface-2)}
+#pbar{height:100%;background:var(--brand)}
+.roles{display:flex;border:2px solid var(--line);border-radius:8px;overflow:hidden}
+.roles button{border:0;background:var(--surface);min-height:42px;padding:0 16px;font-weight:600;font-size:15px;position:relative}
+.roles button.on{background:var(--brand);color:var(--brand-ink)}
+.badge{display:inline-block;min-width:20px;padding:0 6px;margin-left:6px;border-radius:99px;background:var(--bad);color:#fff;font-size:12px;font-weight:700;line-height:20px;text-align:center}
+.demobar{background:var(--warn-bg);color:var(--warn);font-size:13px;font-weight:600;text-align:center;padding:5px 16px}
+h1{font-size:36px;line-height:1.05;font-weight:700}
+.sec-h{display:flex;justify-content:space-between;align-items:baseline;font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;gap:10px}
+.cnt{font-family:var(--font-body);font-size:15px;font-weight:600;letter-spacing:0;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.pad{padding:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 20px;border-radius:8px;border:2px solid var(--line);background:var(--surface);font-weight:600;font-size:17px;text-align:center}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.btn.big{width:100%;min-height:64px;font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.btn.sm{min-height:44px;padding:0 14px;font-size:15px}
+.btn.warnline{border-color:var(--bad);color:var(--bad)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.row2{display:flex;gap:10px;flex-wrap:wrap}
+.row2>*{flex:1 1 140px}
+.fine{font-size:14px;color:var(--ink-2)}
+.plate{display:inline-flex;align-items:stretch;border-radius:5px;overflow:hidden;border:2px solid #111;background:#f6d312;color:#111;font-family:'Barlow Semi Condensed',var(--font-display);font-weight:700;font-size:24px;line-height:1.1;white-space:nowrap}
+.plate i{background:#0b3c9c;color:#fff;font-style:normal;font-size:.5em;display:flex;align-items:flex-end;padding:0 .35em .25em;letter-spacing:.04em}
+.plate b{padding:.12em .5em;letter-spacing:.08em}
+.plate.sm{font-size:18px}
+.plate.lg{font-size:30px}
+.chip{display:inline-block;padding:3px 10px;border-radius:99px;font-size:13px;font-weight:700;letter-spacing:.02em;border:1.5px solid currentColor;white-space:nowrap;font-variant-numeric:tabular-nums}
+.chip.ok{color:var(--ok);background:var(--ok-bg)}
+.chip.warn{color:var(--warn);background:var(--warn-bg)}
+.chip.bad{color:var(--bad);background:var(--bad-bg)}
+.chip.neutral{color:var(--ink-2);background:var(--surface-2)}
+.list{display:flex;flex-direction:column}
+.hrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--surface);border:0;border-top:1px solid var(--line);padding:12px 14px;min-height:68px}
+.hrow:first-child{border-top:0}
+.hrow .mid{flex:1;min-width:0}
+.h-main{font-weight:600}
+.h-sub{font-size:14px;color:var(--ink-2)}
+.field{display:flex;flex-direction:column;gap:6px}
+.lbl{font-weight:600;font-size:15px}
+input[type=text],textarea{width:100%;min-height:52px;padding:10px 12px;border-radius:8px;border:2px solid var(--line);background:var(--surface);font-size:17px}
+textarea{min-height:84px;resize:vertical}
+input.regin{font-family:'Barlow Semi Condensed',var(--font-display);font-weight:700;font-size:22px;letter-spacing:.1em;text-transform:uppercase}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.seg.two{grid-template-columns:repeat(2,1fr)}
+.seg button{min-height:52px;border-radius:8px;border:2px solid var(--line);background:var(--surface);font-weight:600;font-size:16px;padding:6px 8px}
+.seg button.on{font-weight:700}
+.seg button.on.ok{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+.seg button.on.defect,.seg button.on.danger{background:var(--bad-bg);border-color:var(--bad);color:var(--bad)}
+.seg button.on.minor{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}
+.seg button.on.pick{background:var(--surface-2);border-color:var(--ink-2);color:var(--ink)}
+.err-msg{color:var(--bad);font-weight:600;font-size:15px}
+.item{padding:14px 16px;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.item-label{font-size:17px;font-weight:600;margin-bottom:10px}
+.defectbox{margin-top:12px;padding:12px;border-radius:8px;background:var(--bad-bg);display:flex;flex-direction:column;gap:10px}
+.photook{font-weight:700;color:var(--ok)}
+.strip{display:flex;gap:8px;flex-wrap:wrap}
+.dialcard{display:flex;gap:16px;align-items:center}
+.dial{width:132px;height:132px;flex:none}
+.dface{fill:var(--surface-2)}
+.arc{fill:none;stroke:var(--line);stroke-width:8;stroke-linecap:butt}
+.arc.cov{stroke:var(--ok)}
+.dn{font:700 8px var(--font-body);fill:var(--ink-2)}
+.nd{fill:var(--bad)}
+.hub{fill:var(--ink)}
+.verdict{border-radius:10px;padding:16px;border:2px solid currentColor}
+.verdict.ok{color:var(--ok);background:var(--ok-bg)}
+.verdict.warn{color:var(--warn);background:var(--warn-bg)}
+.verdict.bad{color:var(--bad);background:var(--bad-bg)}
+.verdict h2{font-size:32px;text-transform:uppercase;letter-spacing:.04em}
+.verdict p{color:var(--ink);margin-top:4px}
+.ev{list-style:none;margin:0;padding:0}
+.ev li{display:flex;gap:12px;padding:11px 16px;border-top:1px solid var(--line);align-items:baseline}
+.ev li:first-child{border-top:0}
+.ev .st{min-width:50px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.ev .st.pass{color:var(--ok)}.ev .st.flag{color:var(--bad)}
+.ev .what{flex:1;min-width:0}
+.ev .val{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 6px;text-align:center}
+.stat b{display:block;font-family:var(--font-display);font-size:32px;line-height:1;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--ink-2)}
+.tabs{display:flex;gap:6px;overflow-x:auto}
+.tabs button{flex:1 0 auto;min-height:46px;padding:0 16px;border:2px solid var(--line);border-radius:8px;background:var(--surface);font-weight:600}
+.tabs button.on{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.vrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--surface);border:0;border-top:1px solid var(--line);padding:12px 14px;min-height:68px}
+.vwrap:first-child .vrow{border-top:0}
+.detail{padding:14px 16px;border-top:1px solid var(--line);background:var(--surface-2);display:flex;flex-direction:column;gap:12px}
+.detail .card{background:var(--surface)}
+.dfl{padding:10px 12px;border-radius:8px;background:var(--bad-bg);color:var(--ink);display:flex;flex-direction:column;gap:2px}
+.dfl.minor{background:var(--warn-bg)}
+.sev{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.sev.danger{color:var(--bad)}.sev.minor{color:var(--warn)}
+.alert{padding:14px 16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.alert:first-child{border-top:0}
+.alert.done{opacity:.55}
+.ahead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bill{font-family:var(--font-display);font-size:56px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.brow{display:flex;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--line);min-height:60px}
+.brow:first-child{border-top:0}
+.brow .mid{flex:1;min-width:0}
+.tr{display:flex;justify-content:space-between;gap:10px;padding:10px 16px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.tr:first-child{border-top:0}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{display:flex;flex-direction:column;justify-content:space-between;gap:6px;min-height:92px;padding:14px;border:2px solid var(--line);border-radius:10px;background:var(--surface);text-align:left;font-weight:700;font-size:19px}
+.tile small{font-weight:500;color:var(--ink-2);font-size:14px}
+.tile.primary{grid-column:1/-1;min-height:84px;background:var(--brand);border-color:var(--brand);color:var(--brand-ink);font-family:var(--font-display);font-size:30px;letter-spacing:.05em;text-transform:uppercase;justify-content:center}
+.banner{padding:14px 16px;border-radius:10px;border:2px solid currentColor;display:flex;flex-direction:column;gap:6px}
+.banner.red{color:var(--bad);background:var(--bad-bg)}
+.banner.yellow{color:var(--warn);background:var(--warn-bg)}
+.banner p,.banner b{color:var(--ink)}
+.decl{display:flex;gap:12px;align-items:flex-start;padding:14px;border:2px solid var(--line);border-radius:8px;background:var(--surface);font-size:16px}
+.decl input{width:26px;height:26px;flex:none;margin-top:1px}
+.stepper{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.stepper .lbl{flex:1 1 160px}
+.stepper b{min-width:56px;text-align:center;font-variant-numeric:tabular-nums}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;z-index:20;max-width:min(92vw,420px);text-align:center}
+@media (max-width:420px){.dialcard{flex-direction:column;align-items:flex-start}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+
+<div id="app"></div>
+
+<script>
+(function(){
+'use strict';
+var TYPES={artic:'Artic + trailer',rigid:'Rigid lorry',van:'Van'};
+var MIN_SECS=12,MAX_DIST=50,EMAIL='transport@yourfirm.example',WEEKLY=1;
+
+/* ---------- checklist template (the office can edit this) ---------- */
+function T(id,title,minSecs,items){return {id:id,title:title,minSecs:minSecs,items:items.map(function(t,i){return {id:id+i,t:t}})}}
+function seedTpl(){return {
+  cab:T('cab','In the cab',0,['Dashboard warning lights','Brakes and air pressure','Steering and horn','Mirrors and windscreen','Seat belt']),
+  out:T('out','Walk round the outside',12,['Tyres and wheel nuts','Lights and indicators','Fluid leaks','Bodywork and reflectors','Number plates']),
+  trl:T('trl','Trailer and load',8,['Fifth wheel and air/electric lines','Landing legs raised','Trailer lights and tyres','Load secure','Doors and curtains']),
+  bod:T('bod','Body and load',5,['Load secure','Doors, curtains and locks','Tail lift, if fitted']),
+  saf:T('saf','Safety kit and paperwork',0,['Fire extinguisher','Hi-vis and safety boots','Tacho card and delivery paperwork'])
+}}
+function sectionsFor(type){return [S.tpl.cab,S.tpl.out,type==='artic'?S.tpl.trl:S.tpl.bod,S.tpl.saf]}
+function labelFor(key){var f=key;['cab','out','trl','bod','saf'].forEach(function(k){S.tpl[k].items.forEach(function(i){if(S.tpl[k].id+'.'+i.id===key)f=i.t})});return f}
+
+/* ---------- helpers ---------- */
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function hm(ms){return new Date(ms).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
+function dstr(ms){return new Date(ms).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
+function at(h,m){var d=new Date();d.setHours(h,m,0,0);return d.getTime()}
+function fmtReg(r){r=String(r||'').toUpperCase().replace(/\s+/g,' ').trim();if(/^[A-Z]{2}\d{2}[A-Z]{3}$/.test(r))r=r.slice(0,4)+' '+r.slice(4);return r}
+function plate(reg,size){return '<span class="plate '+(size||'')+'"><i>GB</i><b>'+esc(reg||'REG')+'</b></span>'}
+function money(n){return '£'+n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function toast(msg){var t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.textContent=msg;document.body.appendChild(t);setTimeout(function(){t.remove()},3000)}
+function compass(h){var d=['N','NE','E','SE','S','SW','W','NW'];return d[Math.round(h/45)%8]}
+function mmss(s){return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2)}
+
+/* ---------- demo data ---------- */
+function seedVehicles(){return [
+ {id:'v1',reg:'FD71 KLM',type:'artic',last:{driver:'Ally',t:at(5,48),defects:[],flags:[],miles:212450,ev:{dist:11,cov:4,secs:214}}},
+ {id:'v2',reg:'SK21 HGF',type:'rigid',last:{driver:'Dave',t:at(6,12),defects:[{key:'out.out1',label:'Lights and indicators',sev:'minor',note:'Nearside rear marker lamp out'}],flags:[],miles:98210,ev:{dist:18,cov:4,secs:187}}},
+ {id:'v3',reg:'BN19 XRT',type:'artic',last:{driver:'Ally',t:at(6,25),defects:[],flags:['640 m from the vehicle (limit 50 m)','Walk-round incomplete, 1 of 4 sides','Finished in 9 s (minimum 12 s)'],miles:301774,ev:{dist:640,cov:1,secs:9}}},
+ {id:'v4',reg:'MH22 FZE',type:'van',last:{driver:'Dave',t:at(6,40),defects:[{key:'out.out0',label:'Tyres and wheel nuts',sev:'danger',note:'Offside front tyre cut in sidewall, cord showing'}],flags:[],miles:45032,ev:{dist:9,cov:4,secs:152}}},
+ {id:'v5',reg:'LR68 PVD',type:'van',last:null},
+ {id:'v6',reg:'YC20 BMO',type:'rigid',last:null}
+]}
+function seedAlerts(){return [
+ {id:'a1',kind:'danger',reg:'MH22 FZE',text:'Dangerous defect reported: offside front tyre cut in sidewall, cord showing. Do not drive.',t:at(6,40),ack:false},
+ {id:'a2',kind:'flag',reg:'BN19 XRT',text:'Check looks wrong: 640 m from the vehicle, walked round 1 of 4 sides, finished in 9 s.',t:at(6,25),ack:false},
+ {id:'a3',kind:'missed',reg:'YC20 BMO',text:'No walkaround check logged by the 07:00 cut-off.',t:at(7,0),ack:false},
+ {id:'a4',kind:'missed',reg:'LR68 PVD',text:'No walkaround check logged by the 07:00 cut-off.',t:at(7,0),ack:false}
+]}
+var S={role:'driver',dview:'home',otab:'today',open:null,run:null,result:null,filter:'',
+ sim:{near:true,walk:true,online:true},vehicles:seedVehicles(),alerts:seedAlerts(),addType:'rigid',
+ drivers:[{id:'d1',name:'Dave',pin:'2222'},{id:'d2',name:'Ally',pin:'1111'},{id:'d3',name:'Priya',pin:'3333'}],me:null,pinFor:null,pinErr:'',
+ retired:[],queue:[],history:[],tpl:seedTpl()};
+(function(){
+  var D=864e5,n=Date.now(),ago={v1:90,v2:90,v3:90,v4:90,v5:12,v6:40};
+  S.vehicles.forEach(function(v){v.added=n-ago[v.id]*D;if(v.last)S.history.push(histOf('h'+v.id,v,v.last))});
+  S.history.sort(function(a,b){return b.t-a.t});
+  S.retired=[{id:'r1',reg:'KX17 TRL',type:'artic',added:n-60*D,removed:n-9*D},{id:'r2',reg:'DK65 WLM',type:'van',added:n-20*D,removed:n-6*D}];
+})();
+function histOf(id,v,l){return {id:id,reg:v.reg,type:v.type,driver:l.driver,t:l.t,defects:l.defects.length,flags:l.flags.length,danger:l.defects.some(function(d){return d.sev==='danger'})}}
+function veh(id){return S.vehicles.filter(function(v){return v.id===id})[0]}
+function statusOf(l){
+  if(!l)return {k:'warn',label:'Not checked',rank:3};
+  if(l.defects.some(function(d){return d.sev==='danger'}))return {k:'bad',label:'Do not drive',rank:0};
+  if(l.flags.length)return {k:'warn',label:'Flagged',rank:1};
+  if(l.defects.length)return {k:'warn',label:'Defects',rank:2};
+  return {k:'ok',label:'Fit to drive',rank:4};
+}
+function status(v){return statusOf(v.last)}
+function unack(){return S.alerts.filter(function(a){return !a.ack}).length}
+function me(){return S.drivers.filter(function(d){return d.id===S.me})[0]||null}
+
+/* ---------- billing: 1 pound per vehicle per week, any week started is a full week (7-day blocks from the day a vehicle is added), invoiced monthly in arrears ---------- */
+function dnum(ms){var d=new Date(ms);return Math.round(new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()/864e5)}
+function monthBill(){
+  var now=new Date(),y=now.getFullYear(),m=now.getMonth(),firstMs=new Date(y,m,1).getTime();
+  var first=dnum(firstMs),last=dnum(new Date(y,m+1,0).getTime()),today=dnum(now.getTime());
+  var rows=[],total=0,wks=0,proj=0;
+  S.vehicles.concat(S.retired).forEach(function(v){
+    var A=dnum(v.added),active=!v.removed,to=active?today:Math.min(dnum(v.removed),today);
+    function started(hi){
+      if(hi<first||hi<A)return 0;
+      var kmin=Math.max(0,Math.ceil((first-A)/7)),kmax=Math.floor((hi-A)/7);
+      return Math.max(0,kmax-kmin+1);
+    }
+    var n=started(to);
+    if(active)proj+=started(last)*WEEKLY;
+    if(n<=0)return;
+    var c=n*WEEKLY;total+=c;wks+=n;
+    rows.push({reg:v.reg,weeks:n,charge:c,active:active,from:dstr(Math.max(v.added,firstMs)),to:v.removed?dstr(v.removed):''});
+  });
+  return {rows:rows,total:total,weeks:wks,proj:proj,month:now.toLocaleDateString('en-GB',{month:'long'}),nextInvoice:dstr(new Date(y,m+1,1).getTime())};
+}
+
+/* ---------- shared chrome ---------- */
+function barHTML(){
+  var n=unack();
+  return '<header class="bar"><div class="in barin"><div class="left"><span class="wm">KOVI</span></div>'
+  +'<div class="roles" role="group" aria-label="View as"><button data-a="role" data-v="driver" class="'+(S.role==='driver'?'on':'')+'" aria-pressed="'+(S.role==='driver')+'">Driver</button><button data-a="role" data-v="office" class="'+(S.role==='office'?'on':'')+'" aria-pressed="'+(S.role==='office')+'">Office'+(n?'<span class="badge">'+n+'</span>':'')+'</button></div></div></header>'
+  +'<div class="demobar">Demo. GPS, compass, signal and email are simulated. Nothing is saved or sent.</div>';
+}
+function simBox(){
+  function b(k,v,l,on){return '<button class="'+(on?'on pick':'')+'" data-a="sim" data-k="'+k+'" data-v="'+v+'" aria-pressed="'+on+'">'+l+'</button>'}
+  return '<section class="card pad" id="sim" style="display:flex;flex-direction:column;gap:14px"><h2 class="sec-h" style="margin:0"><span>Demo controls</span></h2><p class="fine">A real phone reads its own GPS, compass and signal. Here you act them out, then see what the office gets.</p>'
+  +'<div class="field"><span class="lbl">Where is the driver?</span><div class="seg two">'+b('near',1,'At the vehicle',S.sim.near)+b('near',0,'Away from it',!S.sim.near)+'</div></div>'
+  +'<div class="field"><span class="lbl">What does the driver do outside?</span><div class="seg two">'+b('walk',1,'Walks round',S.sim.walk)+b('walk',0,'Stays in the cab',!S.sim.walk)+'</div></div>'
+  +'<div class="field"><span class="lbl">Phone signal</span><div class="seg two">'+b('online',1,'Good',S.sim.online)+b('online',0,'None',!S.sim.online)+'</div></div></section>';
+}
+
+/* ---------- driver: sign in ---------- */
+function loginView(){
+  var d=S.drivers.filter(function(x){return x.id===S.pinFor})[0];
+  if(!S.drivers.length)return '<main class="in page"><h1>No drivers yet</h1><p class="fine">Ask the office to add you.</p></main>';
+  if(d)return '<main class="in page"><div><h1>Hi '+esc(d.name)+'</h1><p class="fine">Enter your 4-digit PIN. Demo PIN: '+esc(d.pin)+'</p></div><div class="field"><label class="lbl" for="pin">PIN</label><input type="text" id="pin" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000" style="font-size:28px;letter-spacing:.4em;text-align:center"></div>'+(S.pinErr?'<p class="err-msg" role="alert">'+esc(S.pinErr)+'</p>':'')+'<div class="row2"><button class="btn" data-a="pinback">Back</button><button class="btn primary" data-a="pinok">Sign in</button></div></main>';
+  return '<main class="in page"><div><h1>Who is driving?</h1><p class="fine">Tap your name, then enter your PIN.</p></div><div class="card list">'+S.drivers.map(function(x){return '<button class="hrow" data-a="pickdriver" data-id="'+x.id+'"><span class="mid"><span class="h-main">'+esc(x.name)+'</span></span><span class="chip neutral">Sign in</span></button>'}).join('')+'</div></main>';
+}
+
+/* ---------- driver: home, pick, history ---------- */
+function homeView(){
+  var q=S.queue.length,mine=S.history.filter(function(h){return h.driver===me().name}).length;
+  return '<main class="in page"><div><h1>Hi '+esc(me().name)+'</h1><p class="fine">Ready for your walkaround?</p><button class="back" data-a="signout" style="padding:6px 0">Not you? Switch driver</button></div>'
+  +'<div class="tiles"><button class="tile primary" data-a="topick">Start check</button>'
+  +'<button class="tile" data-a="tohist"><span>Previous checks</span><small>'+mine+' by you</small></button>'
+  +'<button class="tile" data-a="sync"><span>Sync</span><small>'+(q?q+' waiting to send':'All sent')+'</small></button></div>'
+  +'<p class="fine">'+(S.sim.online?'Signal is good.':'No signal. Checks save on this phone and send themselves when you are back in signal.')+'</p>'
+  +simBox()+'</main>';
+}
+function listHTML(){
+  var f=S.filter.replace(/\s+/g,'').toUpperCase();
+  var vs=S.vehicles.filter(function(v){return !f||v.reg.replace(/\s+/g,'').indexOf(f)>=0});
+  if(!vs.length)return '<p class="fine pad">No vehicle with that registration is on your fleet. Ask the office to add it.</p>';
+  return vs.map(function(v){
+    var s=status(v);
+    return '<button class="hrow" data-a="start" data-id="'+v.id+'">'+plate(v.reg,'sm')+'<span class="mid"><span class="h-main">'+TYPES[v.type]+'</span><br><span class="h-sub">'+(v.last?'Checked '+hm(v.last.t)+' by '+esc(v.last.driver):'Not checked today')+'</span></span><span class="chip '+(v.last?s.k:'warn')+'">'+(v.last?s.label:'Due')+'</span></button>';
+  }).join('');
+}
+function pickView(){
+  return '<header class="bar"><div class="in barin"><button class="back" data-a="home">← Home</button><span class="fine">Signed in as '+esc(me().name)+'</span></div></header>'
+  +'<main class="in page"><div><h1>Which vehicle?</h1><p class="fine">Type the registration, scan the plate, or tap the vehicle.</p></div>'
+  +'<div style="display:flex;gap:10px"><input type="text" id="regq" class="regin" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AB12 CDE" aria-label="Registration" value="'+esc(S.filter)+'"><button class="btn" data-a="scan" style="flex:none">Scan plate</button></div>'
+  +'<div class="card list" id="vlist">'+listHTML()+'</div></main>';
+}
+function histView(){
+  var mine=S.history.filter(function(h){return h.driver===me().name});
+  return '<header class="bar"><div class="in barin"><button class="back" data-a="home">← Home</button><span class="fine">'+esc(me().name)+'</span></div></header>'
+  +'<main class="in page"><h1>Previous checks</h1>'+(mine.length?'<div class="card list">'+mine.map(function(h){
+    var s=h.danger?['bad','Do not drive']:h.flags?['warn','Flagged']:h.defects?['warn','Defects']:['ok','Fit'];
+    return '<div class="hrow">'+plate(h.reg,'sm')+'<span class="mid"><span class="h-main">'+dstr(h.t)+' · '+hm(h.t)+'</span><br><span class="h-sub">'+TYPES[h.type]+(h.defects?' · '+h.defects+' defect'+(h.defects>1?'s':''):'')+'</span></span><span class="chip '+s[0]+'">'+s[1]+'</span></div>';
+  }).join('')+'</div>':'<p class="fine">No checks yet.</p>')+'</main>';
+}
+
+/* ---------- driver: the check ---------- */
+function curSec(r){var v=veh(r.vid);if(!v)return null;var secs=sectionsFor(v.type);return r.step>=1&&r.step<=secs.length?secs[r.step-1]:null}
+function lockLeft(r){var s=curSec(r);if(!s||!s.minSecs)return 0;return Math.max(0,s.minSecs-Math.floor((Date.now()-r.secEnter)/1000))}
+function enterStep(r){
+  if(r.seen[r.step])r.secEnter=0;else{r.secEnter=Date.now();r.seen[r.step]=true}
+  var s=curSec(r);
+  if(s&&s.id==='out'&&r.h0==null){r.h0=r.heading;r.cov[0]=true}
+}
+function pol(a,r){var t=a*Math.PI/180;return (60+r*Math.sin(t)).toFixed(2)+' '+(60-r*Math.cos(t)).toFixed(2)}
+function dialHTML(r){
+  var arcs='';
+  for(var i=0;i<4;i++){arcs+='<path id="arc'+i+'" class="arc'+(r.cov[i]?' cov':'')+'" d="M'+pol(r.h0+90*i+3,46)+' A46 46 0 0 1 '+pol(r.h0+90*(i+1)-3,46)+'"/>'}
+  return '<div class="card pad dialcard"><svg viewBox="0 0 120 120" class="dial" role="img" aria-label="Compass showing which sides of the vehicle you have walked past"><circle cx="60" cy="60" r="40" class="dface"/>'+arcs+'<text x="60" y="8" text-anchor="middle" class="dn">N</text><g id="needle" transform="rotate('+r.heading.toFixed(1)+' 60 60)"><path d="M60 24 L65 60 L55 60 Z" class="nd"/></g><circle cx="60" cy="60" r="4" class="hub"/></svg>'
+  +'<div><div class="lbl">Walk all the way round</div><p class="fine">Each side turns green as the phone’s compass sweeps past it.</p><p style="margin-top:6px"><b id="covtxt"></b> <span id="hdg" class="fine"></span></p></div></div>';
+}
+function itemHTML(secId,it,r){
+  var key=secId+'.'+it.id,st=r.items[key],s=st&&st.s;
+  var h='<div class="item"><div class="item-label">'+esc(it.t)+'</div><div class="seg two" role="group" aria-label="'+esc(it.t)+'"><button class="'+(s==='ok'?'on ok':'')+'" data-a="set" data-key="'+key+'" data-v="ok" aria-pressed="'+(s==='ok')+'">OK</button><button class="'+(s==='defect'?'on defect':'')+'" data-a="set" data-key="'+key+'" data-v="defect" aria-pressed="'+(s==='defect')+'">Defect</button></div>';
+  if(s==='defect'){
+    h+='<div class="defectbox"><div class="seg two" role="group" aria-label="How serious"><button class="'+(st.sev==='danger'?'on danger':'')+'" data-a="sev" data-key="'+key+'" data-v="danger" aria-pressed="'+(st.sev==='danger')+'">Dangerous</button><button class="'+(st.sev==='minor'?'on minor':'')+'" data-a="sev" data-key="'+key+'" data-v="minor" aria-pressed="'+(st.sev==='minor')+'">Minor</button></div>'
+    +'<textarea data-note="'+key+'" aria-label="Defect note for '+esc(it.t)+'" placeholder="What is wrong and where?">'+esc(st.note||'')+'</textarea>'
+    +(st.photo?'<span class="photook">Photo attached</span>':'<button class="btn sm" data-a="photo" data-key="'+key+'">Take photo</button>')+'</div>';
+  }
+  return h+'</div>';
+}
+function preHTML(r,v){
+  var dd=(v.last&&v.last.defects)||[],red=dd.filter(function(d){return d.sev==='danger'}),yel=dd.filter(function(d){return d.sev==='minor'}),b='';
+  if(red.length)b+='<div class="banner red" role="alert"><b>Do not drive. A dangerous defect is still open.</b><p>'+red.map(function(d){return esc(d.label)+': '+esc(d.note)}).join('<br>')+'</p><p>Speak to the office before this vehicle moves.</p></div>';
+  if(yel.length)b+='<div class="banner yellow"><b>Serviceable defect open. Fit for use.</b><p>'+yel.map(function(d){return esc(d.label)+': '+esc(d.note)}).join('<br>')+'</p></div>';
+  function lic(val,l){return '<button class="'+(r.pre.licence===val?'on pick':'')+'" data-a="prelic" data-v="'+val+'" aria-pressed="'+(r.pre.licence===val)+'">'+l+'</button>'}
+  return b+'<p class="fine">This replaces the paper check. The office is emailed straight away about any defect you report.</p>'
+  +'<section class="card pad" style="display:flex;flex-direction:column;gap:16px"><h2 class="sec-h" style="margin:0"><span>Before you start</span></h2>'
+  +'<div class="field"><span class="lbl">Photo of the registration plate</span>'+(r.pre.photo?'<span class="photook">Photo attached</span>':'<button class="btn" data-a="prephoto">Take photo of the plate</button><span class="fine">You can’t carry on without it.</span>')+'</div>'
+  +'<div class="field"><span class="lbl">Licence and CPC card with you?</span><div class="seg" role="group" aria-label="Licence and CPC card">'+lic('yes','Yes')+lic('no','No')+lic('na','N/A')+'</div></div>'
+  +'<div class="field"><label class="lbl" for="miles">Mileage reading</label><input type="text" id="miles" inputmode="numeric" autocomplete="off" placeholder="e.g. 212450" value="'+esc(r.pre.miles)+'"></div></section>';
+}
+function secHTML(r,sec){
+  var done=sec.items.filter(function(i){return r.items[sec.id+'.'+i.id]}).length;
+  return '<section><h2 class="sec-h"><span>'+esc(sec.title)+'</span><span class="cnt">'+done+'/'+sec.items.length+'</span></h2>'
+  +(sec.id==='out'?dialHTML(r)+'<div style="height:12px"></div>':'')
+  +'<button class="btn primary" data-a="allok" style="width:100%;margin-bottom:12px">Everything OK in this section</button>'
+  +'<div class="card">'+sec.items.map(function(i){return itemHTML(sec.id,i,r)}).join('')+'</div></section>';
+}
+function finHTML(r){
+  return '<section class="card pad" style="display:flex;flex-direction:column;gap:16px"><h2 class="sec-h" style="margin:0"><span>Finish</span></h2>'
+  +'<div class="field"><span class="lbl">General photos (optional)</span><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn sm" data-a="finphoto"'+(r.fin.photos>=3?' disabled':'')+'>Add photo</button><span class="fine">'+r.fin.photos+' of 3 added</span></div></div>'
+  +'<div class="field"><label class="lbl" for="fnotes">Anything else to tell the office? (optional)</label><textarea id="fnotes" placeholder="Notes">'+esc(r.fin.notes)+'</textarea></div>'
+  +'<label class="decl"><input type="checkbox" data-d="d1"'+(r.fin.d1?' checked':'')+'><span>I have carried out these checks and I consider the vehicle fit for use.</span></label>'
+  +'<label class="decl"><input type="checkbox" data-d="d2"'+(r.fin.d2?' checked':'')+'><span>I am fit to drive. I am not affected by alcohol or drugs and I know my driving hours.</span></label></section>';
+}
+function checkView(){
+  var r=S.run,v=veh(r.vid),secs=sectionsFor(v.type),n=secs.length,total=n+2,kind=r.step===0?'pre':r.step<=n?'sec':'fin',sec=curSec(r);
+  var body=kind==='pre'?preHTML(r,v):kind==='sec'?secHTML(r,sec):finHTML(r);
+  var label=kind==='fin'?'Submit check':'Next';
+  return '<header class="bar"><div class="in barin"><button class="back" data-a="cancel">← Cancel</button>'+plate(v.reg,'sm')+'<span class="fine">Step '+(r.step+1)+' of '+total+'</span></div><div class="prog"><div id="pbar" style="width:'+((r.step+1)/total*100)+'%"></div></div></header>'
+  +'<main class="in page"><div class="strip"><span class="chip" id="gps">GPS</span><span class="chip neutral" id="tim">0:00</span>'+(sec&&sec.minSecs?'<span class="chip warn" id="lock"></span>':'')+'</div>'
+  +body
+  +'<div class="row2">'+(r.step>0?'<button class="btn" data-a="prev">Previous</button>':'')+'<button class="btn primary" id="nextbtn" data-a="next" data-label="'+label+'">'+label+'</button></div>'
+  +simBox()+'</main>';
+}
+function paintSensors(){
+  var r=S.run;if(!r||S.role!=='driver'||S.dview!=='check')return;
+  var g=$('gps');
+  if(g){var near=r.dist<=MAX_DIST;g.className='chip '+(near?'ok':'bad');g.textContent='GPS '+Math.round(r.dist)+' m from vehicle'}
+  var t=$('tim');if(t)t.textContent='Time '+mmss(r.secs);
+  var left=lockLeft(r),lk=$('lock');
+  if(lk){lk.className='chip '+(left?'warn':'ok');lk.textContent=left?'Next unlocks in '+mmss(left):'Page unlocked'}
+  var nb=$('nextbtn');if(nb){nb.disabled=left>0;nb.textContent=left>0?'Next in '+mmss(left):nb.getAttribute('data-label')}
+  var nd=$('needle');if(nd)nd.setAttribute('transform','rotate('+r.heading.toFixed(1)+' 60 60)');
+  for(var i=0;i<4;i++){var a=$('arc'+i);if(a)a.setAttribute('class','arc'+(r.cov[i]?' cov':''))}
+  var c=$('covtxt');if(c)c.textContent=r.cov.filter(Boolean).length+' of 4 sides';
+  var hd=$('hdg');if(hd)hd.textContent='Heading '+Math.round(r.heading)+'° '+compass(r.heading);
+}
+var tickN=0;
+setInterval(function(){
+  var r=S.run;if(!r||S.role!=='driver'||S.dview!=='check')return;
+  tickN++;
+  var sec=curSec(r);
+  if(sec&&sec.id==='out'&&r.h0!=null){
+    var full=r.cov.every(Boolean);
+    if(S.sim.walk&&!full)r.heading=(r.heading+6)%360;
+    else if(!S.sim.walk)r.heading=(r.h0+Math.random()*3)%360;
+    var rel=((r.heading-r.h0)%360+360)%360;
+    r.cov[Math.min(3,Math.floor(rel/90))]=true;
+  }else{r.heading=(r.heading+(Math.random()-.5)*2+360)%360}
+  if(tickN%10===0){
+    r.secs=Math.floor((Date.now()-r.started)/1000);
+    r.dist=S.sim.near?6+Math.random()*16:380+Math.random()*70;
+    r.maxDist=Math.max(r.maxDist,r.dist);
+  }
+  paintSensors();
+},100);
+
+function missing(r,sec){
+  var m=[];
+  sec.items.forEach(function(i){
+    var st=r.items[sec.id+'.'+i.id];
+    if(!st)m.push(i.t+': mark OK or Defect');
+    else if(st.s==='defect'&&(!st.sev||!(st.note||'').trim()||!st.photo))m.push(i.t+': defect needs seriousness, a note and a photo');
+  });
+  return m;
+}
+function keepScroll(fn){var y=window.scrollY;fn();window.scrollTo(0,y)}
+function startRun(id){
+  var d=S.sim.near?8:420;
+  S.run={vid:id,started:Date.now(),step:0,items:{},heading:Math.random()*360,h0:null,cov:[false,false,false,false],dist:d,maxDist:d,secs:0,secEnter:Date.now(),seen:{0:true},pre:{photo:false,licence:'',miles:''},fin:{photos:0,notes:'',d1:false,d2:false}};
+  S.dview='check';render();window.scrollTo(0,0);
+}
+
+/* ---------- submit, offline queue, sync ---------- */
+function applyRec(rec){
+  var v=veh(rec.vid);
+  if(v)v.last=rec.last;
+  rec.alerts.forEach(function(a){S.alerts.unshift({id:uid(),kind:a.kind,reg:a.reg,text:a.text,t:a.t,ack:false})});
+  S.history.unshift(rec.hist);
+}
+function flushQueue(){var n=S.queue.length;S.queue.forEach(applyRec);S.queue=[];return n}
+function submitRun(){
+  var r=S.run,v=veh(r.vid),defects=[],now=Date.now(),al=[];
+  Object.keys(r.items).forEach(function(k){var st=r.items[k];if(st.s==='defect')defects.push({key:k,label:labelFor(k),sev:st.sev,note:st.note.trim()})});
+  var cov=r.cov.filter(Boolean).length,secs=Math.floor((now-r.started)/1000),flags=[];
+  if(r.maxDist>MAX_DIST)flags.push(Math.round(r.maxDist)+' m from the vehicle (limit '+MAX_DIST+' m)');
+  if(cov<4)flags.push('Walk-round incomplete, '+cov+' of 4 sides');
+  if(secs<MIN_SECS)flags.push('Finished in '+secs+' s (minimum '+MIN_SECS+' s)');
+  var last={driver:me().name,t:now,defects:defects,flags:flags,miles:Number(r.pre.miles),notes:r.fin.notes.trim(),ev:{dist:r.maxDist,cov:cov,secs:secs}};
+  var d0=defects.filter(function(d){return d.sev==='danger'})[0];
+  if(d0)al.push({kind:'danger',reg:v.reg,text:'Dangerous defect reported: '+d0.label.toLowerCase()+', '+d0.note+'. Do not drive.',t:now});
+  if(flags.length)al.push({kind:'flag',reg:v.reg,text:'Check looks wrong: '+flags.join('; ').toLowerCase()+'.',t:now});
+  var rec={id:uid(),vid:v.id,last:last,alerts:al,hist:histOf(uid(),v,last)};
+  if(S.sim.online)applyRec(rec);else S.queue.push(rec);
+  S.result={vid:v.id,reg:v.reg,rid:rec.id,last:last};S.run=null;S.dview='result';
+}
+function resultView(){
+  var R=S.result,l=R.last,s=statusOf(l),queued=S.queue.some(function(q){return q.id===R.rid});
+  var k=l.flags.length&&s.rank!==0?'warn':s.k;
+  var head=s.rank===0?'Do not drive':l.flags.length?'Sent, but flagged':l.defects.length?'Sent with defects':'Check complete';
+  var sub=s.rank===0?'A dangerous defect is logged. The vehicle must not move until the office clears it.':l.flags.length?'The office has been told this check may not have been done properly.':l.defects.length?'No dangerous defects. The office will get them fixed.':'Everything checked. Safe journey.';
+  if(queued){head='Saved on this phone';k='warn';sub='There is no signal. The check sends itself when you are back in signal. The office has not seen it yet.'}
+  function row(ok,what,val){return '<li><span class="st '+(ok?'pass':'flag')+'">'+(ok?'Pass':'Flag')+'</span><span class="what">'+what+'</span><span class="val">'+val+'</span></li>'}
+  return '<main class="in page"><div>'+plate(R.reg,'lg')+'</div><div class="verdict '+k+'"><h2>'+head+'</h2><p>'+sub+'</p></div>'
+  +'<section><h2 class="sec-h"><span>How we know the check was done</span></h2><div class="card"><ul class="ev">'
+  +row(l.ev.dist<=MAX_DIST,'Stayed at the vehicle','farthest '+Math.round(l.ev.dist)+' m')
+  +row(l.ev.cov===4,'Walked all the way round',l.ev.cov+' of 4 sides')
+  +row(l.ev.secs>=MIN_SECS,'Took long enough',l.ev.secs+' s')
+  +'</ul></div></section>'
+  +(!queued&&(l.flags.length||l.defects.length)?'<p class="fine">Email sent to '+EMAIL+' (demo). See it in the Office view.</p>':'')
+  +(queued?simBox():'')
+  +'<div class="row2"><button class="btn primary" data-a="home">Back to home</button><button class="btn" data-a="role" data-v="office">Open Office view</button></div></main>';
+}
+
+/* ---------- office ---------- */
+function detailHTML(v){
+  var l=v.last;
+  if(!l)return '<div class="detail"><p>No check logged today. The cut-off was 07:00.</p><button class="btn sm" data-a="nudge" data-id="'+v.id+'" style="align-self:flex-start">Send reminder to driver</button></div>';
+  function row(ok,what,val){return '<li><span class="st '+(ok?'pass':'flag')+'">'+(ok?'Pass':'Flag')+'</span><span class="what">'+what+'</span><span class="val">'+val+'</span></li>'}
+  return '<div class="detail"><div class="fine">Checked '+hm(l.t)+' by '+esc(l.driver)+(l.miles?' · '+Number(l.miles).toLocaleString('en-GB')+' miles':'')+'</div>'
+  +'<div class="card"><ul class="ev">'+row(l.ev.dist<=MAX_DIST,'Stayed at the vehicle','farthest '+Math.round(l.ev.dist)+' m')+row(l.ev.cov===4,'Walked all the way round',l.ev.cov+' of 4 sides')+row(l.ev.secs>=MIN_SECS,'Took long enough',l.ev.secs+' s')+'</ul></div>'
+  +(l.defects.length?l.defects.map(function(d,i){return '<div class="dfl '+d.sev+'"><div class="sev '+d.sev+'">'+(d.sev==='danger'?'Dangerous':'Minor')+'</div><b>'+esc(d.label)+'</b><div>'+esc(d.note)+'</div><button class="btn sm" data-a="fix" data-id="'+v.id+'" data-v="'+i+'" style="align-self:flex-start;margin-top:8px">Mark as fixed</button></div>'}).join(''):'<p class="fine">No open defects.</p>')
+  +(l.notes?'<p class="fine">Driver note: '+esc(l.notes)+'</p>':'')
+  +'</div>';
+}
+function todayView(){
+  var vs=S.vehicles.slice().sort(function(a,b){return status(a).rank-status(b).rank});
+  var checked=S.vehicles.filter(function(v){return v.last}).length;
+  var issues=S.vehicles.filter(function(v){return v.last&&(v.last.defects.length||v.last.flags.length)}).length;
+  var s='<div class="stats"><div class="stat"><b>'+S.vehicles.length+'</b><span>Vehicles</span></div><div class="stat"><b>'+checked+'</b><span>Checked</span></div><div class="stat"><b>'+(S.vehicles.length-checked)+'</b><span>Not checked</span></div><div class="stat"><b>'+issues+'</b><span>Need action</span></div></div>';
+  return s+'<section><h2 class="sec-h"><span>Fleet today</span><span class="cnt">worst first</span></h2><div class="card">'+vs.map(function(v){
+    var st=status(v),open=S.open===v.id;
+    return '<div class="vwrap"><button class="vrow" data-a="toggle" data-id="'+v.id+'" aria-expanded="'+open+'">'+plate(v.reg,'sm')+'<span class="mid" style="flex:1;min-width:0"><span class="h-main">'+TYPES[v.type]+'</span><br><span class="h-sub">'+(v.last?hm(v.last.t)+' · '+esc(v.last.driver):'No check yet')+'</span></span><span class="chip '+st.k+'">'+st.label+'</span></button>'+(open?detailHTML(v):'')+'</div>';
+  }).join('')+'</div></section>';
+}
+function alertsView(){
+  if(!S.alerts.length)return '<p class="fine">No alerts.</p>';
+  var kinds={danger:['bad','Dangerous defect'],flag:['warn','Check looks wrong'],missed:['warn','Missed check']};
+  return '<section><h2 class="sec-h"><span>Alerts</span><span class="cnt">'+unack()+' open</span></h2><div class="card">'+S.alerts.map(function(a){
+    var k=kinds[a.kind];
+    return '<div class="alert'+(a.ack?' done':'')+'"><div class="ahead"><span class="chip '+k[0]+'">'+k[1]+'</span>'+plate(a.reg,'sm')+'<span class="fine">'+hm(a.t)+'</span></div><p>'+esc(a.text)+'</p><p class="fine">Email sent to '+EMAIL+' (demo)</p>'+(a.ack?'':'<button class="btn sm" data-a="ack" data-id="'+a.id+'" style="align-self:flex-start">Acknowledge</button>')+'</div>';
+  }).join('')+'</div></section>';
+}
+function driversView(){
+  var rows=S.drivers.map(function(d){
+    var mine=S.vehicles.filter(function(v){return v.last&&v.last.driver===d.name});
+    var fl=mine.filter(function(v){return v.last.flags.length}).length;
+    var sub=mine.length?mine.length+' check'+(mine.length>1?'s':'')+' today'+(fl?' · '+fl+' flagged':''):'No checks today';
+    return '<div class="brow"><span class="mid"><span class="h-main">'+esc(d.name)+'</span><br><span class="h-sub">'+sub+' · PIN '+esc(d.pin)+'</span></span>'+(fl?'<span class="chip warn">Flagged</span>':'')+'<button class="btn sm warnline" data-a="rmdriver" data-id="'+d.id+'">Remove</button></div>';
+  }).join('');
+  return '<section><h2 class="sec-h"><span>Drivers</span><span class="cnt">'+S.drivers.length+'</span></h2><div class="card">'+(rows||'<div class="brow"><span class="fine">No drivers yet.</span></div>')+'</div><p class="fine" style="margin-top:8px">Drivers sign in on their own phone with their name and PIN. Drivers are free.</p></section>'
+  +'<section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2 class="sec-h" style="margin:0"><span>Add a driver</span></h2><div class="field"><label class="lbl" for="dname">Name</label><input type="text" id="dname" autocomplete="off" placeholder="e.g. Sam"></div><div class="field"><label class="lbl" for="dpin">4-digit PIN</label><input type="text" id="dpin" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000"></div><button class="btn primary" data-a="adddriver">Add driver</button></section>';
+}
+function templatesView(){
+  var keys=['cab','out','trl','bod','saf'],who={cab:'All vehicles',out:'All vehicles',trl:'Artics only',bod:'Rigids and vans',saf:'All vehicles'};
+  return '<p class="fine">This is the checklist your drivers follow. Changes apply from the next check a driver starts. A page stays locked until its minimum time is up, so the walk-round can’t be rushed.</p>'
+  +keys.map(function(k){
+    var s=S.tpl[k];
+    return '<section class="card"><div class="pad" style="display:flex;flex-direction:column;gap:12px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><h2 class="sec-h" style="margin:0"><span>'+esc(s.title)+'</span></h2><span class="chip neutral">'+who[k]+'</span></div>'
+    +'<div class="stepper"><span class="lbl">Minimum time on page</span><button class="btn sm" data-a="mint" data-k="'+k+'" data-v="-5" aria-label="5 seconds less">−</button><b>'+(s.minSecs?s.minSecs+' s':'None')+'</b><button class="btn sm" data-a="mint" data-k="'+k+'" data-v="5" aria-label="5 seconds more">+</button></div></div>'
+    +s.items.map(function(i){return '<div class="brow"><span class="mid">'+esc(i.t)+'</span><button class="btn sm warnline" data-a="rmitem" data-k="'+k+'" data-id="'+i.id+'">Remove</button></div>'}).join('')
+    +'<div class="pad" style="display:flex;gap:10px;border-top:1px solid var(--line)"><input type="text" id="add-'+k+'" autocomplete="off" placeholder="Add a check, e.g. Spare wheel" aria-label="New check for '+esc(s.title)+'"><button class="btn primary sm" data-a="additem" data-k="'+k+'" style="flex:none">Add</button></div></section>';
+  }).join('');
+}
+function billingView(){
+  var B=monthBill(),units=S.vehicles.length;
+  var t='<div><div class="fine">'+B.month+' invoice so far</div><div class="bill">'+money(B.total)+'</div><p class="fine">'+B.weeks+' vehicle-week'+(B.weeks===1?'':'s')+' at '+money(WEEKLY)+' each. Invoiced on '+B.nextInvoice+'. If nothing changes the full month comes to '+money(B.proj)+'.</p></div>'
+  +'<div class="card pad"><div class="lbl">Rate</div><p>'+money(WEEKLY)+' per vehicle per week, billed monthly in arrears. Same price for every vehicle type. Checks are unlimited, and drivers and office staff are free. Add or remove vehicles any time. Any week started counts as a full week, so a vehicle on your account for one day is charged '+money(WEEKLY)+'. Weeks run in 7-day blocks from the day a vehicle is added.</p><p class="fine" style="margin-top:6px">'+units+' vehicle'+(units===1?'':'s')+' on your account now, '+S.drivers.length+' driver'+(S.drivers.length===1?'':'s')+'.</p></div>';
+  var tbl='<section><h2 class="sec-h"><span>'+B.month+' invoice lines</span><span class="cnt">'+B.rows.length+'</span></h2><div class="card">'+B.rows.map(function(r){return '<div class="brow">'+plate(r.reg,'sm')+'<span class="mid"><span class="h-main">'+r.weeks+' week'+(r.weeks===1?'':'s')+' started</span><br><span class="h-sub">'+r.from+' to '+(r.active?'now':r.to+' (removed)')+'</span></span><b>'+money(r.charge)+'</b></div>'}).join('')+'<div class="tr"><b>Total so far</b><b>'+money(B.total)+'</b></div></div></section>';
+  var list='<section><h2 class="sec-h"><span>Vehicles</span><span class="cnt">'+S.vehicles.length+'</span></h2><div class="card">'+S.vehicles.map(function(v){
+    return '<div class="brow">'+plate(v.reg,'sm')+'<span class="mid"><span class="h-main">'+TYPES[v.type]+'</span><br><span class="h-sub">On your account since '+dstr(v.added)+'</span></span><button class="btn sm warnline" data-a="remove" data-id="'+v.id+'">Remove</button></div>';
+  }).join('')+'</div></section>';
+  function b(k,l){return '<button class="'+(S.addType===k?'on pick':'')+'" data-a="addtype" data-v="'+k+'" aria-pressed="'+(S.addType===k)+'">'+l+'</button>'}
+  var add='<section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2 class="sec-h" style="margin:0"><span>Add a vehicle</span></h2><div class="field"><label class="lbl" for="newreg">Registration</label><input type="text" id="newreg" class="regin" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AB12 CDE"></div><div class="field"><span class="lbl">Type</span><div class="seg">'+b('van','Van')+b('rigid','Rigid')+b('artic','Artic')+'</div></div><button class="btn primary" data-a="addveh">Add vehicle</button></section>';
+  return t+tbl+list+add;
+}
+function officeView(){
+  var tabs=[['today','Today'],['alerts','Alerts'],['drivers','Drivers'],['templates','Checklist'],['billing','Billing']];
+  var n=unack();
+  return '<main class="in page"><div><h1>Transport office</h1><p class="fine">Signed in as Sarah, transport manager.</p></div><div class="tabs" role="tablist">'+tabs.map(function(t){return '<button role="tab" class="'+(S.otab===t[0]?'on':'')+'" aria-selected="'+(S.otab===t[0])+'" data-a="otab" data-v="'+t[0]+'">'+t[1]+(t[0]==='alerts'&&n?'<span class="badge">'+n+'</span>':'')+'</button>'}).join('')+'</div>'
+  +(S.otab==='today'?todayView():S.otab==='alerts'?alertsView():S.otab==='drivers'?driversView():S.otab==='templates'?templatesView():billingView())+'</main>';
+}
+
+/* ---------- render ---------- */
+function render(){
+  var body;
+  if(S.role==='office')body=officeView();
+  else if(!me())body=loginView();
+  else if(S.dview==='check'&&S.run)body=checkView();
+  else if(S.dview==='result'&&S.result)body=resultView();
+  else if(S.dview==='pick')body=pickView();
+  else if(S.dview==='hist')body=histView();
+  else body=homeView();
+  var ownBar=S.role==='driver'&&me()&&(S.dview==='check'||S.dview==='pick'||S.dview==='hist');
+  app.innerHTML=(ownBar?'':barHTML())+body;
+  paintSensors();
+}
+
+/* ---------- events ---------- */
+app.addEventListener('click',function(e){
+  var el=e.target.closest('[data-a]');if(!el||el.disabled)return;
+  var a=el.dataset.a,id=el.dataset.id,v=el.dataset.v,key=el.dataset.key,r=S.run;
+  if(a==='role'){S.role=v;S.open=null;render();window.scrollTo(0,0)}
+  else if(a==='pickdriver'){S.pinFor=id;S.pinErr='';render();if($('pin'))$('pin').focus()}
+  else if(a==='pinback'){S.pinFor=null;S.pinErr='';render()}
+  else if(a==='pinok'){
+    var dd=S.drivers.filter(function(x){return x.id===S.pinFor})[0];
+    if(dd&&$('pin').value===dd.pin){S.me=dd.id;S.pinFor=null;S.pinErr='';S.dview='home';render();window.scrollTo(0,0)}
+    else{S.pinErr='Wrong PIN. Try again.';render();if($('pin'))$('pin').focus()}
+  }
+  else if(a==='signout'){S.me=null;S.run=null;S.result=null;S.pinFor=null;S.pinErr='';S.dview='home';render();window.scrollTo(0,0)}
+  else if(a==='adddriver'){
+    var nm=$('dname').value.trim(),pn=$('dpin').value.trim();
+    if(!nm){toast('Enter the driver’s name');return}
+    if(!/^\d{4}$/.test(pn)){toast('PIN must be 4 digits');return}
+    if(S.drivers.some(function(x){return x.name.toLowerCase()===nm.toLowerCase()})){toast('That name is already in use');return}
+    S.drivers.push({id:uid(),name:nm,pin:pn});render();toast(nm+' added');
+  }
+  else if(a==='rmdriver'){
+    S.drivers=S.drivers.filter(function(x){return x.id!==id});
+    if(S.me===id){S.me=null;S.run=null}
+    render();
+  }
+  else if(a==='sim'){
+    S.sim[el.dataset.k]=v==='1';
+    if(r){r.dist=S.sim.near?8:420;r.maxDist=Math.max(r.maxDist,r.dist)}
+    if(el.dataset.k==='online'&&S.sim.online&&S.queue.length){var sent=flushQueue();toast('Signal is back. '+sent+' check'+(sent>1?'s':'')+' sent to the office.')}
+    keepScroll(render);
+  }
+  else if(a==='home'){S.run=null;S.dview='home';render();window.scrollTo(0,0)}
+  else if(a==='topick'){S.filter='';S.dview='pick';render();window.scrollTo(0,0)}
+  else if(a==='tohist'){S.dview='hist';render();window.scrollTo(0,0)}
+  else if(a==='sync'){
+    if(!S.sim.online){toast('No signal. Your checks are safe on this phone.');return}
+    var q=flushQueue();toast(q?q+' check'+(q>1?'s':'')+' sent to the office':'Everything is already sent');render();
+  }
+  else if(a==='scan'){
+    var pickv=S.vehicles[Math.floor(Math.random()*S.vehicles.length)];
+    toast('Plate read: '+pickv.reg);startRun(pickv.id);
+  }
+  else if(a==='start'){startRun(id)}
+  else if(a==='cancel'){S.run=null;S.dview='home';render();window.scrollTo(0,0)}
+  else if(a==='set'){
+    var st=r.items[key]||(r.items[key]={sev:'',note:'',photo:false});
+    st.s=v;if(v==='ok'){st.sev='';st.note='';st.photo=false}
+    keepScroll(render);
+  }
+  else if(a==='allok'){
+    var sec=curSec(r);
+    sec.items.forEach(function(i){var k=sec.id+'.'+i.id;if(!r.items[k])r.items[k]={s:'ok',sev:'',note:'',photo:false}});
+    keepScroll(render);
+  }
+  else if(a==='sev'){r.items[key].sev=v;keepScroll(render)}
+  else if(a==='photo'){r.items[key].photo=true;keepScroll(render)}
+  else if(a==='prephoto'){r.pre.photo=true;keepScroll(render)}
+  else if(a==='prelic'){r.pre.licence=v;keepScroll(render)}
+  else if(a==='finphoto'){r.fin.photos=Math.min(3,r.fin.photos+1);keepScroll(render)}
+  else if(a==='prev'){r.step--;enterStep(r);render();window.scrollTo(0,0)}
+  else if(a==='next'){
+    var n=sectionsFor(veh(r.vid).type).length,kind=r.step===0?'pre':r.step<=n?'sec':'fin';
+    if(kind==='pre'){
+      if(!r.pre.photo){toast('Take a photo of the registration plate first');return}
+      if(!r.pre.licence){toast('Say whether your licence and CPC card are with you');return}
+      if(!/^\d+$/.test(String(r.pre.miles).trim())){toast('Enter the mileage');return}
+    }else if(kind==='sec'){
+      var m=missing(r,curSec(r));
+      if(m.length){toast(m[0]+(m.length>1?' (+'+(m.length-1)+' more)':''));return}
+      if(lockLeft(r)>0){toast('This page unlocks in '+mmss(lockLeft(r)));return}
+    }else{
+      if(!r.fin.d1||!r.fin.d2){toast('Tick both declarations to submit');return}
+      submitRun();render();window.scrollTo(0,0);return;
+    }
+    r.step++;enterStep(r);render();window.scrollTo(0,0);
+  }
+  else if(a==='otab'){S.otab=v;render()}
+  else if(a==='toggle'){S.open=S.open===id?null:id;keepScroll(render)}
+  else if(a==='nudge'){toast('Reminder sent to the driver (demo)')}
+  else if(a==='ack'){S.alerts.filter(function(x){return x.id===id})[0].ack=true;render()}
+  else if(a==='fix'){
+    var fv=veh(id);fv.last.defects.splice(Number(v),1);
+    if(!fv.last.defects.some(function(d){return d.sev==='danger'}))S.alerts.forEach(function(al){if(al.reg===fv.reg&&al.kind==='danger')al.ack=true});
+    toast('Defect cleared. Drivers no longer see the warning.');keepScroll(render);
+  }
+  else if(a==='mint'){var ts=S.tpl[el.dataset.k];ts.minSecs=Math.max(0,Math.min(120,ts.minSecs+Number(v)));keepScroll(render)}
+  else if(a==='additem'){
+    var k2=el.dataset.k,inp=$('add-'+k2),txt=inp.value.trim();
+    if(!txt){toast('Type the check first');return}
+    S.tpl[k2].items.push({id:k2+uid(),t:txt});keepScroll(render);
+  }
+  else if(a==='rmitem'){
+    var k3=el.dataset.k;
+    if(S.tpl[k3].items.length<=1){toast('Keep at least one check on each page');return}
+    S.tpl[k3].items=S.tpl[k3].items.filter(function(i){return i.id!==id});keepScroll(render);
+  }
+  else if(a==='addtype'){S.addType=v;var keep=$('newreg')?$('newreg').value:'';render();if($('newreg'))$('newreg').value=keep}
+  else if(a==='addveh'){
+    var reg=fmtReg($('newreg').value);
+    if(!reg){toast('Enter the registration first');return}
+    if(S.vehicles.some(function(x){return x.reg===reg})){toast('That registration is already in the fleet');return}
+    S.vehicles.push({id:uid(),reg:reg,type:S.addType,last:null,added:Date.now()});render();toast(reg+' added. First week '+money(WEEKLY)+' starts today.');
+  }
+  else if(a==='remove'){
+    if(S.vehicles.length<=1){toast('Keep at least one vehicle in the demo');return}
+    var gone=S.vehicles.filter(function(x){return x.id===id})[0];
+    if(gone){gone.removed=Date.now();S.retired.push(gone);toast(gone.reg+' removed. Billing stops today; the current week is still charged.')}
+    S.vehicles=S.vehicles.filter(function(x){return x.id!==id});
+    S.alerts=S.alerts.filter(function(al){return S.vehicles.some(function(x){return x.reg===al.reg})});
+    render();
+  }
+});
+app.addEventListener('input',function(e){
+  var el=e.target,r=S.run;
+  if(el.dataset.note&&r){r.items[el.dataset.note].note=el.value}
+  else if(el.id==='miles'&&r){el.value=el.value.replace(/\D/g,'');r.pre.miles=el.value}
+  else if(el.id==='fnotes'&&r){r.fin.notes=el.value}
+  else if(el.id==='regq'){el.value=el.value.toUpperCase();S.filter=el.value;$('vlist').innerHTML=listHTML()}
+  else if(el.id==='newreg'){el.value=el.value.toUpperCase()}
+  else if(el.id==='pin'||el.id==='dpin'){el.value=el.value.replace(/\D/g,'')}
+});
+app.addEventListener('change',function(e){
+  var el=e.target;
+  if(el.dataset.d&&S.run){S.run.fin[el.dataset.d]=el.checked}
+});
+render();
+})();
+</script>
