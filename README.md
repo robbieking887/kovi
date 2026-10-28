@@ -17,5 +17,13 @@ Vehicle walkaround checks for fleets. Drivers check a vehicle on their phone, th
 - Invoiced monthly in arrears from the units on the account. Checks, drivers and office users are free.
 - Vehicles can be added or removed at any time.
 
+## Automatic accounting and billing
+- **Monthly run** on the 1st at 06:00: builds an invoice per customer from the vehicles on the account (one line per vehicle, weeks started), adds VAT, emails it, and takes payment by card if auto-pay is on.
+- **Failed payments:** declined cards are flagged, the customer is emailed a card-update link, and the payment is retried. Overdue invoices get reminders. The admin can retry, remind, or mark an invoice paid by bank transfer.
+- **Customers** (office users) see usage, invoices and receipts, and manage their card, auto-pay, billing email and VAT number.
+- **Admin** sees all customers, invoices, unpaid totals, VAT totals, and can copy all invoices as CSV.
+- **Accounting sync:** invoices and payments are pushed to Xero (QuickBooks the same way) as they happen.
+- In the real build Stripe Billing handles invoicing, card collection, retries and receipts; usage (vehicle-weeks) is reported to Stripe each month.
+
 ## Planned stack
 Next.js web app (driver app as an installable PWA), Supabase (database, auth, storage), Stripe (monthly invoicing), email alerts.

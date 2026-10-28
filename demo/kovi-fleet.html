@@ -45,7 +45,7 @@ button{cursor:pointer}
 .prog{height:4px;background:var(--surface-2)}
 #pbar{height:100%;background:var(--brand)}
 .roles{display:flex;border:2px solid var(--line);border-radius:8px;overflow:hidden}
-.roles button{border:0;background:var(--surface);min-height:42px;padding:0 16px;font-weight:600;font-size:15px;position:relative}
+.roles button{border:0;background:var(--surface);min-height:42px;padding:0 11px;font-weight:600;font-size:15px;position:relative}
 .roles button.on{background:var(--brand);color:var(--brand-ink)}
 .badge{display:inline-block;min-width:20px;padding:0 6px;margin-left:6px;border-radius:99px;background:var(--bad);color:#fff;font-size:12px;font-weight:700;line-height:20px;text-align:center}
 .demobar{background:var(--warn-bg);color:var(--warn);font-size:13px;font-weight:600;text-align:center;padding:5px 16px}
@@ -158,6 +158,12 @@ input.regin{font-family:'Barlow Semi Condensed',var(--font-display);font-weight:
 .stepper{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .stepper .lbl{flex:1 1 160px}
 .stepper b{min-width:56px;text-align:center;font-variant-numeric:tabular-nums}
+.meta2{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;font-weight:600;overflow-wrap:anywhere}
+.meta2 .fine{font-weight:400}
+.inv{padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.logrow{padding:10px 16px;border-top:1px solid var(--line);font-size:15px}
+.logrow:first-child{border-top:0}
+.logrow .fine{display:block}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;z-index:20;max-width:min(92vw,420px);text-align:center}
 @media (max-width:420px){.dialcard{flex-direction:column;align-items:flex-start}.stats{grid-template-columns:repeat(2,1fr)}}
 </style>
@@ -214,7 +220,8 @@ function seedAlerts(){return [
 var S={role:'driver',dview:'home',otab:'today',open:null,run:null,result:null,filter:'',
  sim:{near:true,walk:true,online:true},vehicles:seedVehicles(),alerts:seedAlerts(),addType:'rigid',
  drivers:[{id:'d1',name:'Dave',pin:'2222'},{id:'d2',name:'Ally',pin:'1111'},{id:'d3',name:'Priya',pin:'3333'}],me:null,pinFor:null,pinErr:'',
- retired:[],queue:[],history:[],tpl:seedTpl()};
+ retired:[],queue:[],history:[],tpl:seedTpl(),
+ bill:{tab:'usage',openInv:null,hqtab:'overview',openC:null},vat:{on:true,rate:0.2},xero:{on:false,log:[]},customers:seedCustomers(),invoices:[],invSeq:0,events:[]};
 (function(){
   var D=864e5,n=Date.now(),ago={v1:90,v2:90,v3:90,v4:90,v5:12,v6:40};
   S.vehicles.forEach(function(v){v.added=n-ago[v.id]*D;if(v.last)S.history.push(histOf('h'+v.id,v,v.last))});
@@ -222,6 +229,161 @@ var S={role:'driver',dview:'home',otab:'today',open:null,run:null,result:null,fi
   S.retired=[{id:'r1',reg:'KX17 TRL',type:'artic',added:n-60*D,removed:n-9*D},{id:'r2',reg:'DK65 WLM',type:'van',added:n-20*D,removed:n-6*D}];
 })();
 function histOf(id,v,l){return {id:id,reg:v.reg,type:v.type,driver:l.driver,t:l.t,defects:l.defects.length,flags:l.flags.length,danger:l.defects.some(function(d){return d.sev==='danger'})}}
+/* ---------- accounting and billing: customers, invoices, auto-collection, accounting sync ---------- */
+function seedCustomers(){return [
+ {id:'c1',name:'Your Haulage Ltd',email:'accounts@yourhaulage.example',vatNo:'GB 123 4567 89',card:{brand:'Visa',last4:'4242'},autopay:true,cardFails:false,units:null},
+ {id:'c2',name:'Clyde Tippers',email:'office@clydetippers.example',vatNo:'GB 222 3344 55',card:{brand:'Visa',last4:'1881'},autopay:true,cardFails:false,units:6},
+ {id:'c3',name:'MacLeod Logistics',email:'accounts@macleodlogistics.example',vatNo:'GB 333 4455 66',card:{brand:'Mastercard',last4:'4444'},autopay:true,cardFails:false,units:14},
+ {id:'c4',name:'Borders Plant Hire',email:'finance@bordersplant.example',vatNo:'',card:null,autopay:false,cardFails:false,units:3},
+ {id:'c5',name:'Kerr & Sons Transport',email:'admin@kerrsons.example',vatNo:'GB 555 6677 88',card:{brand:'Visa',last4:'0341'},autopay:true,cardFails:true,units:9}
+]}
+function cust(id){return S.customers.filter(function(c){return c.id===id})[0]}
+function invById(id){return S.invoices.filter(function(i){return i.id===id})[0]}
+function unitsOf(c){return c.units==null?S.vehicles.length:c.units}
+function sum(arr,f){return arr.reduce(function(s,x){return s+f(x)},0)}
+function ev(text){S.events.unshift({t:Date.now(),text:text});if(S.events.length>40)S.events.pop()}
+function statusChip(i){var m={paid:['ok','Paid'],open:['warn','Due '+dstr(i.due)],overdue:['bad','Overdue'],failed:['bad','Card declined']}[i.status];return '<span class="chip '+m[0]+'">'+m[1]+'</span>'}
+function xeroPush(inv,what){if(S.xero.on)S.xero.log.unshift({t:Date.now(),text:inv.id+' '+(what||'sent')+' to Xero ('+cust(inv.cid).name+', '+money(inv.total)+')'})}
+function mkInvoice(c,period,issued,lines,status,method,paidAt){
+  var net=sum(lines,function(l){return l.amount}),rate=S.vat.on?S.vat.rate:0,vat=Math.round(net*rate*100)/100;
+  S.invSeq++;
+  var inv={id:'INV-'+('000'+S.invSeq).slice(-4),cid:c.id,period:period,issued:issued,due:issued+14*864e5,lines:lines,net:net,rate:rate,vat:vat,total:net+vat,status:status,method:method||'',paidAt:paidAt||0,attempts:0};
+  S.invoices.unshift(inv);return inv;
+}
+function payInvoice(inv,method){
+  inv.status='paid';inv.paidAt=Date.now();inv.method=method;
+  ev(inv.id+' paid by '+method.toLowerCase()+'. Receipt emailed to '+cust(inv.cid).email+'.');
+  xeroPush(inv,'payment matched and sent');
+}
+function collect(inv){
+  var c=cust(inv.cid);
+  if(!c.autopay||!c.card){inv.status='open';ev(inv.id+' emailed to '+c.email+' for bank transfer, due '+dstr(inv.due)+'.');return}
+  inv.attempts++;
+  if(c.cardFails){inv.status='failed';ev(inv.id+': card ending '+c.card.last4+' was declined. '+c.name+' emailed. Automatic retry in 3 days.');return}
+  payInvoice(inv,'Card '+c.card.last4);
+}
+function runBilling(){
+  var now=new Date(),period=now.toLocaleDateString('en-GB',{month:'long'}),made=0;
+  S.customers.forEach(function(c){
+    if(S.invoices.some(function(i){return i.cid===c.id&&i.period===period}))return;
+    var lines;
+    if(c.units==null){
+      lines=monthBill().rows.map(function(r){return {desc:r.reg+', '+period+' ('+r.from+(r.active?' to now':' to '+r.to)+')',qty:r.weeks,unit:WEEKLY,amount:r.charge*1}});
+    }else{
+      lines=[{desc:'Vehicle-weeks, '+period+' ('+c.units+' vehicles)',qty:c.units*4,unit:WEEKLY,amount:c.units*4*WEEKLY}];
+    }
+    if(!lines.length)return;
+    var inv=mkInvoice(c,period,Date.now(),lines,'open','',0);made++;
+    ev(inv.id+' created for '+c.name+': '+money(inv.total)+(inv.vat?' including VAT':'')+'.');
+    xeroPush(inv,'created and sent');
+    collect(inv);
+  });
+  return made;
+}
+function seedInvoices(){
+  var now=new Date(),y=now.getFullYear(),m=now.getMonth();
+  function mname(off){return new Date(y,m+off,1).toLocaleDateString('en-GB',{month:'long'})}
+  function iss(off){return new Date(y,m+off,1,6,0).getTime()}
+  [[-2,-1],[-1,0]].forEach(function(p){
+    S.customers.forEach(function(c){
+      var u=c.id==='c1'?(p[0]===-2?5:6):c.units,wks=4;
+      var lines=[{desc:'Vehicle-weeks, '+mname(p[0])+' ('+u+' vehicles)',qty:u*wks,unit:WEEKLY,amount:u*wks*WEEKLY}];
+      var latest=p[0]===-1,st='paid',method=c.card?'Card '+c.card.last4:'Bank transfer';
+      if(latest&&c.id==='c4'){st='overdue';method=''}
+      if(latest&&c.id==='c5'){st='failed';method=''}
+      var inv=mkInvoice(c,mname(p[0]),iss(p[1]),lines,st,method,st==='paid'?iss(p[1])+36e5:0);
+      if(st==='failed')inv.attempts=2;
+    });
+  });
+  S.events.push({t:iss(0)+36e5,text:'Monthly run on '+dstr(iss(0))+': 5 invoices created, 3 paid by card, 1 card declined, 1 sent for bank transfer.'});
+  S.events.push({t:iss(0)+3*864e5,text:'Card declined for Kerr & Sons Transport. Customer emailed.'});
+  S.events.push({t:iss(0)+16*864e5,text:'Overdue reminder emailed to finance@bordersplant.example.'});
+  S.events.sort(function(a,b){return b.t-a.t});
+}
+function invHTML(inv){
+  var c=cust(inv.cid);
+  return '<div class="inv"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><div class="fine">Invoice</div><b style="font-family:var(--font-display);font-size:26px">'+inv.id+'</b></div>'+statusChip(inv)+'</div>'
+  +'<div class="meta2"><div><div class="fine">Issued</div>'+dstr(inv.issued)+'</div><div><div class="fine">Due</div>'+dstr(inv.due)+'</div><div><div class="fine">From</div>Kovi<div class="fine">VAT GB 000 0000 00 (example)</div></div><div><div class="fine">Bill to</div>'+esc(c.name)+'<div class="fine">'+esc(c.email)+(c.vatNo?' · '+esc(c.vatNo):'')+'</div></div></div>'
+  +'<div class="card">'+inv.lines.map(function(l){return '<div class="tr"><span>'+esc(l.desc)+'<br><span class="fine">'+l.qty+' × '+money(l.unit)+'</span></span><b>'+money(l.amount)+'</b></div>'}).join('')
+  +'<div class="tr"><span>Subtotal</span><span>'+money(inv.net)+'</span></div>'+(inv.vat?'<div class="tr"><span>VAT '+Math.round(inv.rate*100)+'%</span><span>'+money(inv.vat)+'</span></div>':'')+'<div class="tr"><b>Total</b><b>'+money(inv.total)+'</b></div></div>'
+  +(inv.status==='paid'?'<p class="fine">Paid '+dstr(inv.paidAt)+' by '+esc(inv.method)+'.</p>':'')+'</div>';
+}
+function officeInvoices(){
+  var mine=S.invoices.filter(function(i){return i.cid==='c1'});
+  if(!mine.length)return '<p class="fine">No invoices yet. The first one is sent on the 1st of the month.</p>';
+  return '<section><h2 class="sec-h"><span>Invoices</span><span class="cnt">'+mine.length+'</span></h2><div class="card">'+mine.map(function(i){
+    var open=S.bill.openInv===i.id;
+    return '<div class="vwrap"><button class="vrow" data-a="invopen" data-id="'+i.id+'" aria-expanded="'+open+'"><span class="mid" style="flex:1;min-width:0"><span class="h-main">'+i.id+' · '+esc(i.period)+'</span><br><span class="h-sub">Issued '+dstr(i.issued)+'</span></span><b>'+money(i.total)+'</b>'+statusChip(i)+'</button>'
+    +(open?'<div class="detail">'+invHTML(i)+(i.status!=='paid'?'<button class="btn primary" data-a="paynow" data-id="'+i.id+'">Pay '+money(i.total)+' now</button>':'')+'</div>':'')+'</div>';
+  }).join('')+'</div></section>';
+}
+function paymentView(){
+  var c=cust('c1');
+  function ap(v,l){return '<button class="'+(c.autopay===v?'on pick':'')+'" data-a="autopay" data-v="'+(v?1:0)+'" aria-pressed="'+(c.autopay===v)+'">'+l+'</button>'}
+  return '<section class="card pad" style="display:flex;flex-direction:column;gap:14px"><h2 class="sec-h" style="margin:0"><span>Payment method</span></h2>'
+  +(c.card?'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><b>'+c.card.brand+' ending '+c.card.last4+'</b><br><span class="fine">Charged automatically when each invoice is issued</span></div><button class="btn sm" data-a="updcard">Update card</button></div>':'<p>No card on file.</p><button class="btn primary" data-a="updcard">Add a card</button>')
+  +'<div class="field"><span class="lbl">Pay invoices automatically</span><div class="seg two">'+ap(true,'On')+ap(false,'Off, bank transfer')+'</div></div></section>'
+  +'<section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2 class="sec-h" style="margin:0"><span>Billing details</span></h2>'
+  +'<div class="field"><label class="lbl" for="bco">Company name</label><input type="text" id="bco" data-bf="name" value="'+esc(c.name)+'"></div>'
+  +'<div class="field"><label class="lbl" for="bem">Send invoices to</label><input type="text" id="bem" data-bf="email" value="'+esc(c.email)+'"></div>'
+  +'<div class="field"><label class="lbl" for="bvat">VAT number (optional)</label><input type="text" id="bvat" data-bf="vatNo" value="'+esc(c.vatNo)+'"></div>'
+  +'<p class="fine">Invoices are emailed on the 1st of each month, with a receipt when the payment goes through.</p></section>';
+}
+function billingView(){
+  var t=S.bill.tab,due=S.invoices.filter(function(i){return i.cid==='c1'&&i.status!=='paid'}).length;
+  function b(k,l){return '<button class="'+(t===k?'on pick':'')+'" data-a="btab" data-v="'+k+'" aria-pressed="'+(t===k)+'">'+l+'</button>'}
+  return '<div class="seg" role="group" aria-label="Billing sections">'+b('usage','Usage')+b('invoices','Invoices'+(due?' ('+due+')':''))+b('payment','Payment')+'</div>'
+  +(t==='usage'?usageView():t==='invoices'?officeInvoices():paymentView());
+}
+function invActions(i){
+  var b='';
+  if(i.status==='failed')b+='<button class="btn sm" data-a="retry" data-id="'+i.id+'">Retry payment</button><button class="btn sm" data-a="sendlink" data-id="'+i.cid+'">Email card update link</button>';
+  if(i.status!=='paid')b+='<button class="btn sm" data-a="remind" data-id="'+i.id+'">Send reminder</button><button class="btn sm" data-a="markpaid" data-id="'+i.id+'">Mark as paid</button>';
+  return b?'<div class="row2">'+b+'</div>':'';
+}
+function hqOverview(){
+  var vehicles=sum(S.customers,unitsOf),unpaid=S.invoices.filter(function(i){return i.status!=='paid'}),period=new Date().toLocaleDateString('en-GB',{month:'long'});
+  var billed=S.customers.every(function(c){return S.invoices.some(function(i){return i.cid===c.id&&i.period===period})});
+  return '<div class="stats"><div class="stat"><b>'+S.customers.length+'</b><span>Customers</span></div><div class="stat"><b>'+vehicles+'</b><span>Vehicles</span></div><div class="stat"><b>'+money(vehicles*WEEKLY)+'</b><span>Per week</span></div><div class="stat"><b>'+money(sum(unpaid,function(i){return i.total}))+'</b><span>Unpaid</span></div></div>'
+  +'<section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2 class="sec-h" style="margin:0"><span>Monthly billing run</span></h2><p>Runs by itself on the 1st at 06:00. It builds every invoice from the vehicles on each account, adds VAT, emails it, takes payment by card, chases failures and sends it all to your accounting.</p><button class="btn primary" data-a="runbill"'+(billed?' disabled':'')+'>'+(billed?period+' is already billed':'Run '+period+' billing now (demo)')+'</button></section>'
+  +'<section><h2 class="sec-h"><span>Activity</span></h2><div class="card">'+(S.events.length?S.events.slice(0,10).map(function(e){return '<div class="logrow"><span class="fine">'+dstr(e.t)+' '+hm(e.t)+'</span>'+esc(e.text)+'</div>'}).join(''):'<div class="logrow fine">Nothing yet.</div>')+'</div></section>';
+}
+function hqCustomers(){
+  return '<section><h2 class="sec-h"><span>Customers</span><span class="cnt">'+S.customers.length+'</span></h2><div class="card">'+S.customers.map(function(c){
+    var open=S.bill.openC===c.id,u=unitsOf(c),owed=S.invoices.filter(function(i){return i.cid===c.id&&i.status!=='paid'});
+    var chip=c.cardFails?'<span class="chip bad">Card declined</span>':owed.length?'<span class="chip warn">Owes '+money(sum(owed,function(i){return i.total}))+'</span>':'<span class="chip ok">Up to date</span>';
+    return '<div class="vwrap"><button class="vrow" data-a="hqcust" data-id="'+c.id+'" aria-expanded="'+open+'"><span class="mid" style="flex:1;min-width:0"><span class="h-main">'+esc(c.name)+'</span><br><span class="h-sub">'+u+' vehicle'+(u===1?'':'s')+' · '+money(u*WEEKLY)+' a week</span></span>'+chip+'</button>'
+    +(open?'<div class="detail"><div class="meta2"><div><div class="fine">Payment</div>'+(c.card?c.card.brand+' ending '+c.card.last4:'Bank transfer')+'</div><div><div class="fine">Auto-pay</div>'+(c.autopay?'On':'Off')+'</div><div><div class="fine">Invoices to</div>'+esc(c.email)+'</div><div><div class="fine">VAT number</div>'+(esc(c.vatNo)||'None')+'</div></div>'+(c.cardFails?'<button class="btn sm" data-a="sendlink" data-id="'+c.id+'" style="align-self:flex-start">Email card update link</button>':'')+'</div>':'')+'</div>';
+  }).join('')+'</div></section>';
+}
+function hqInvoices(){
+  return '<section><h2 class="sec-h"><span>All invoices</span><span class="cnt">'+S.invoices.length+'</span></h2><div class="card">'+S.invoices.map(function(i){
+    var open=S.bill.openInv===i.id;
+    return '<div class="vwrap"><button class="vrow" data-a="invopen" data-id="'+i.id+'" aria-expanded="'+open+'"><span class="mid" style="flex:1;min-width:0"><span class="h-main">'+i.id+' · '+esc(cust(i.cid).name)+'</span><br><span class="h-sub">'+esc(i.period)+' · '+money(i.total)+'</span></span>'+statusChip(i)+'</button>'+(open?'<div class="detail">'+invHTML(i)+invActions(i)+'</div>':'')+'</div>';
+  }).join('')+'</div></section>';
+}
+function csvText(){
+  var rows=['Invoice,Customer,Period,Issued,Net,VAT,Total,Status'];
+  S.invoices.slice().reverse().forEach(function(i){rows.push([i.id,'"'+cust(i.cid).name+'"',i.period,new Date(i.issued).toISOString().slice(0,10),i.net.toFixed(2),i.vat.toFixed(2),i.total.toFixed(2),i.status].join(','))});
+  return rows.join('\n');
+}
+function hqAccounting(){
+  var inv=S.invoices,net=sum(inv,function(i){return i.net}),vat=sum(inv,function(i){return i.vat}),paid=sum(inv.filter(function(i){return i.status==='paid'}),function(i){return i.total}),gross=net+vat;
+  function vb(v,l){return '<button class="'+(S.vat.on===v?'on pick':'')+'" data-a="vat" data-v="'+(v?1:0)+'" aria-pressed="'+(S.vat.on===v)+'">'+l+'</button>'}
+  return '<section class="card pad" style="display:flex;flex-direction:column;gap:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2 class="sec-h" style="margin:0"><span>Xero</span></h2><span class="chip '+(S.xero.on?'ok':'neutral')+'">'+(S.xero.on?'Connected':'Not connected')+'</span></div>'
+  +'<p>'+(S.xero.on?'Every invoice and payment is sent to Xero as it happens, so your books are always up to date.':'Connect Xero and every invoice and payment is sent over automatically. QuickBooks works the same way.')+'</p><button class="btn '+(S.xero.on?'':'primary')+'" data-a="xero">'+(S.xero.on?'Disconnect Xero':'Connect Xero (demo)')+'</button>'
+  +(S.xero.on?'<div class="card">'+(S.xero.log.length?S.xero.log.slice(0,6).map(function(e){return '<div class="logrow"><span class="fine">'+dstr(e.t)+' '+hm(e.t)+'</span>'+esc(e.text)+'</div>'}).join(''):'<div class="logrow fine">Nothing to send yet.</div>')+'</div>':'')+'</section>'
+  +'<section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2 class="sec-h" style="margin:0"><span>VAT</span></h2><div class="field"><span class="lbl">Add VAT to new invoices</span><div class="seg two">'+vb(true,'Yes, '+Math.round(S.vat.rate*100)+'%')+vb(false,'No')+'</div></div></section>'
+  +'<section><h2 class="sec-h"><span>Totals, all invoices</span></h2><div class="card"><div class="tr"><span>Invoiced before VAT</span><span>'+money(net)+'</span></div><div class="tr"><span>VAT charged</span><span>'+money(vat)+'</span></div><div class="tr"><b>Total invoiced</b><b>'+money(gross)+'</b></div><div class="tr"><span>Collected</span><span>'+money(paid)+'</span></div><div class="tr"><span>Still to collect</span><span>'+money(gross-paid)+'</span></div></div></section>'
+  +'<section style="display:flex;flex-direction:column;gap:10px"><button class="btn" data-a="copycsv">Copy all invoices as CSV</button><div id="csvfall"></div></section>';
+}
+function hqView(){
+  var tabs=[['overview','Overview'],['customers','Customers'],['invoices','Invoices'],['accounting','Accounting']],t=S.bill.hqtab;
+  var body=t==='overview'?hqOverview():t==='customers'?hqCustomers():t==='invoices'?hqInvoices():hqAccounting();
+  return '<main class="in page"><div><h1>Kovi admin</h1><p class="fine">Customers, invoices and accounting for the whole business.</p></div><div class="tabs" role="tablist">'+tabs.map(function(x){return '<button role="tab" class="'+(t===x[0]?'on':'')+'" aria-selected="'+(t===x[0])+'" data-a="hqtab" data-v="'+x[0]+'">'+x[1]+'</button>'}).join('')+'</div>'+body+'</main>';
+}
+seedInvoices();
+
 function veh(id){return S.vehicles.filter(function(v){return v.id===id})[0]}
 function statusOf(l){
   if(!l)return {k:'warn',label:'Not checked',rank:3};
@@ -260,7 +422,7 @@ function monthBill(){
 function barHTML(){
   var n=unack();
   return '<header class="bar"><div class="in barin"><div class="left"><span class="wm">KOVI</span></div>'
-  +'<div class="roles" role="group" aria-label="View as"><button data-a="role" data-v="driver" class="'+(S.role==='driver'?'on':'')+'" aria-pressed="'+(S.role==='driver')+'">Driver</button><button data-a="role" data-v="office" class="'+(S.role==='office'?'on':'')+'" aria-pressed="'+(S.role==='office')+'">Office'+(n?'<span class="badge">'+n+'</span>':'')+'</button></div></div></header>'
+  +'<div class="roles" role="group" aria-label="View as"><button data-a="role" data-v="driver" class="'+(S.role==='driver'?'on':'')+'" aria-pressed="'+(S.role==='driver')+'">Driver</button><button data-a="role" data-v="office" class="'+(S.role==='office'?'on':'')+'" aria-pressed="'+(S.role==='office')+'">Office'+(n?'<span class="badge">'+n+'</span>':'')+'</button><button data-a="role" data-v="admin" class="'+(S.role==='admin'?'on':'')+'" aria-pressed="'+(S.role==='admin')+'">Admin</button></div></div></header>'
   +'<div class="demobar">Demo. GPS, compass, signal and email are simulated. Nothing is saved or sent.</div>';
 }
 function simBox(){
@@ -513,7 +675,7 @@ function templatesView(){
     +'<div class="pad" style="display:flex;gap:10px;border-top:1px solid var(--line)"><input type="text" id="add-'+k+'" autocomplete="off" placeholder="Add a check, e.g. Spare wheel" aria-label="New check for '+esc(s.title)+'"><button class="btn primary sm" data-a="additem" data-k="'+k+'" style="flex:none">Add</button></div></section>';
   }).join('');
 }
-function billingView(){
+function usageView(){
   var B=monthBill(),units=S.vehicles.length;
   var t='<div><div class="fine">'+B.month+' invoice so far</div><div class="bill">'+money(B.total)+'</div><p class="fine">'+B.weeks+' vehicle-week'+(B.weeks===1?'':'s')+' at '+money(WEEKLY)+' each. Invoiced on '+B.nextInvoice+'. If nothing changes the full month comes to '+money(B.proj)+'.</p></div>'
   +'<div class="card pad"><div class="lbl">Rate</div><p>'+money(WEEKLY)+' per vehicle per week, billed monthly in arrears. Same price for every vehicle type. Checks are unlimited, and drivers and office staff are free. Add or remove vehicles any time. Any week started counts as a full week, so a vehicle on your account for one day is charged '+money(WEEKLY)+'. Weeks run in 7-day blocks from the day a vehicle is added.</p><p class="fine" style="margin-top:6px">'+units+' vehicle'+(units===1?'':'s')+' on your account now, '+S.drivers.length+' driver'+(S.drivers.length===1?'':'s')+'.</p></div>';
@@ -535,7 +697,8 @@ function officeView(){
 /* ---------- render ---------- */
 function render(){
   var body;
-  if(S.role==='office')body=officeView();
+  if(S.role==='admin')body=hqView();
+  else if(S.role==='office')body=officeView();
   else if(!me())body=loginView();
   else if(S.dview==='check'&&S.run)body=checkView();
   else if(S.dview==='result'&&S.result)body=resultView();
@@ -643,6 +806,34 @@ app.addEventListener('click',function(e){
     if(S.tpl[k3].items.length<=1){toast('Keep at least one check on each page');return}
     S.tpl[k3].items=S.tpl[k3].items.filter(function(i){return i.id!==id});keepScroll(render);
   }
+  else if(a==='btab'){S.bill.tab=v;S.bill.openInv=null;render()}
+  else if(a==='invopen'){S.bill.openInv=S.bill.openInv===id?null:id;keepScroll(render)}
+  else if(a==='hqtab'){S.bill.hqtab=v;S.bill.openInv=null;S.bill.openC=null;render()}
+  else if(a==='hqcust'){S.bill.openC=S.bill.openC===id?null:id;keepScroll(render)}
+  else if(a==='autopay'){var own=cust('c1');own.autopay=v==='1';toast(own.autopay?'Auto-pay is on':'Auto-pay is off. Invoices will be emailed for you to pay.');render()}
+  else if(a==='updcard'){
+    var own2=cust('c1'),fixed=0;
+    own2.card={brand:'Visa',last4:String(1000+Math.floor(Math.random()*9000))};own2.cardFails=false;
+    S.invoices.forEach(function(i){if(i.cid==='c1'&&i.status==='failed'){collect(i);fixed++}});
+    toast(fixed?'Card updated. The outstanding payment was collected.':'Card updated');render();
+  }
+  else if(a==='paynow'){var pi=invById(id),pc=cust(pi.cid);payInvoice(pi,pc.card?'Card '+pc.card.last4:'Card');toast('Payment received. Receipt emailed.');keepScroll(render)}
+  else if(a==='markpaid'){payInvoice(invById(id),'Bank transfer');toast('Marked as paid');keepScroll(render)}
+  else if(a==='retry'){var ri=invById(id);collect(ri);toast(ri.status==='paid'?'Payment collected':'Card declined again');keepScroll(render)}
+  else if(a==='sendlink'){var sc=cust(id);sc.cardFails=false;ev('Card update link emailed to '+sc.email+'. '+sc.name+' updated their card (demo).');toast('Link emailed to '+sc.email+'. Card updated (demo).');keepScroll(render)}
+  else if(a==='remind'){var mi=invById(id),mc=cust(mi.cid);ev('Reminder for '+mi.id+' emailed to '+mc.email+'.');toast('Reminder emailed to '+mc.email+' (demo)')}
+  else if(a==='runbill'){var made=runBilling();toast(made?made+' invoice'+(made>1?'s':'')+' created and sent':'Already billed for this month');render()}
+  else if(a==='xero'){
+    S.xero.on=!S.xero.on;
+    if(S.xero.on)S.xero.log.unshift({t:Date.now(),text:S.invoices.length+' existing invoices synced to Xero'});
+    toast(S.xero.on?'Xero connected (demo)':'Xero disconnected');render();
+  }
+  else if(a==='vat'){S.vat.on=v==='1';toast(S.vat.on?'New invoices will include VAT':'New invoices will not include VAT');render()}
+  else if(a==='copycsv'){
+    var text=csvText(),fall=$('csvfall');
+    var showFallback=function(){if(fall)fall.innerHTML='<div class="field"><span class="lbl">Select all and copy</span><textarea readonly id="csvbox" style="min-height:140px;font-size:13px">'+esc(text)+'</textarea></div>';var tb=$('csvbox');if(tb){tb.focus();tb.select()}};
+    try{navigator.clipboard.writeText(text).then(function(){toast('CSV copied')},showFallback)}catch(err){showFallback()}
+  }
   else if(a==='addtype'){S.addType=v;var keep=$('newreg')?$('newreg').value:'';render();if($('newreg'))$('newreg').value=keep}
   else if(a==='addveh'){
     var reg=fmtReg($('newreg').value);
@@ -666,6 +857,7 @@ app.addEventListener('input',function(e){
   else if(el.id==='fnotes'&&r){r.fin.notes=el.value}
   else if(el.id==='regq'){el.value=el.value.toUpperCase();S.filter=el.value;$('vlist').innerHTML=listHTML()}
   else if(el.id==='newreg'){el.value=el.value.toUpperCase()}
+  else if(el.dataset.bf){cust('c1')[el.dataset.bf]=el.value}
   else if(el.id==='pin'||el.id==='dpin'){el.value=el.value.replace(/\D/g,'')}
 });
 app.addEventListener('change',function(e){
