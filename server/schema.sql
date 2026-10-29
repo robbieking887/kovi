@@ -98,3 +98,91 @@ begin
   end loop;
   return n;
 end $$;
+
+-- ===================== v2: templates, defect loop, trailers, handovers, reminders, jobs =====================
+
+-- drivers can log in with a company code + PIN (no email or password)
+alter table users alter column email drop not null;
+alter table users alter column password_hash drop not null;
+alter table users add column if not exists pin_hmac text;
+create unique index if not exists users_pin_idx on users (company_id, pin_hmac) where pin_hmac is not null;
+
+alter table companies add column if not exists check_by time;                         -- null = no "who hasn't checked" alerts
+alter table companies add column if not exists check_days text not null default '12345'; -- ISO weekdays 1=Mon .. 7=Sun
+alter table companies add column if not exists weekly_report boolean not null default true;
+alter table companies add column if not exists handover_on boolean not null default false;
+alter table companies add column if not exists terms_accepted_at timestamptz;
+alter table companies add column if not exists terms_version text;
+alter table companies add column if not exists missed_alerted_on date;
+alter table companies add column if not exists reminders_on date;
+alter table companies add column if not exists report_sent_to date;
+
+-- check templates: one default per company, any number of others, assigned per vehicle
+create table if not exists templates (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references companies(id) on delete cascade,
+  name text not null,
+  sections jsonb not null default '[]'::jsonb,
+  is_default boolean not null default false,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create index if not exists templates_company_idx on templates (company_id);
+create unique index if not exists templates_one_default_idx on templates (company_id) where is_default;
+
+alter table vehicles add column if not exists template_id uuid references templates(id) on delete set null;
+alter table vehicles add column if not exists daily_check boolean not null default true;
+alter table vehicles add column if not exists mot_due date;
+alter table vehicles add column if not exists tax_due date;
+alter table vehicles add column if not exists service_due date;
+alter table vehicles add column if not exists pmi_due date;
+
+alter table checks add column if not exists trailer_id uuid references vehicles(id);
+alter table checks add column if not exists template_id uuid;
+alter table checks add column if not exists checklist jsonb;           -- snapshot of the sections used, so later edits never change history
+create index if not exists checks_trailer_idx on checks (trailer_id, started_at desc);
+
+-- defects are first-class records with a life cycle: open -> assigned -> fixed
+create table if not exists defects (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references companies(id) on delete cascade,
+  vehicle_id uuid not null references vehicles(id) on delete cascade,
+  check_id uuid references checks(id) on delete set null,
+  section text not null default '', item text not null,
+  severity text not null default 'minor' check (severity in ('minor','major','danger')),
+  note text, photo text,
+  status text not null default 'open' check (status in ('open','assigned','fixed')),
+  assigned_to text, assigned_at timestamptz,
+  fixed_at timestamptz, fixed_by uuid references users(id), fix_note text, fix_photo text,
+  seen_count int not null default 1, last_seen_at timestamptz not null default now(),
+  reported_by uuid references users(id),
+  created_at timestamptz not null default now()
+);
+create index if not exists defects_company_idx on defects (company_id, status, created_at desc);
+create index if not exists defects_vehicle_idx on defects (vehicle_id, status);
+-- the same fault on the same vehicle is one open defect, however many drivers report it
+create unique index if not exists defects_one_open_idx on defects (vehicle_id, section, item) where status <> 'fixed';
+
+-- hire / handover records: timestamped, located photos when a vehicle goes out and comes back
+create table if not exists handovers (
+  id uuid primary key,
+  company_id uuid not null references companies(id) on delete cascade,
+  vehicle_id uuid not null references vehicles(id) on delete cascade,
+  user_id uuid not null references users(id),
+  kind text not null check (kind in ('out','in')),
+  started_at timestamptz not null default now(), finished_at timestamptz,
+  lat double precision, lng double precision, acc real,
+  mileage int, fuel text, other_party text, notes text,
+  photos jsonb not null default '[]'::jsonb,   -- [{name,label}]
+  signature text,
+  created_at timestamptz not null default now()
+);
+create index if not exists handovers_company_idx on handovers (company_id, created_at desc);
+create index if not exists handovers_vehicle_idx on handovers (vehicle_id, created_at desc);
+
+-- so a reminder for a given date is only ever sent once per stage
+create table if not exists reminders_sent (
+  vehicle_id uuid not null references vehicles(id) on delete cascade,
+  kind text not null, due date not null, stage int not null, sent_on date not null default current_date,
+  primary key (vehicle_id, kind, due, stage)
+);
+alter table templates add column if not exists settings jsonb not null default '{}'::jsonb;   -- { gps: false } for indoor plant etc.

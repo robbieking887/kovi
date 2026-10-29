@@ -1,4 +1,1 @@
-{ "name": "kovi-server", "version": "1.0.0", "private": true, "main": "index.js",
-  "scripts": { "start": "node index.js" },
-  "engines": { "node": ">=20" },
-  "dependencies": { "@google-cloud/storage": "^7.14.0", "bcryptjs": "^2.4.3", "express": "^4.21.2", "jsonwebtoken": "^9.0.2", "pg": "^8.13.1" } }
+{"name":"kovi-server","version":"1.0.0","private":true,"main":"index.js","scripts":{"start":"node index.js"},"engines":{"node":">=20"},"dependencies":{"@google-cloud/storage":"^7.14.0","bcryptjs":"^2.4.3","express":"^4.21.2","jsonwebtoken":"^9.0.2","pdfkit":"^0.20.2","pg":"^8.13.1"}}

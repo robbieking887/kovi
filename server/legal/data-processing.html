@@ -1,0 +1,56 @@
+<!-- REVIEW BEFORE GO-LIVE: UK GDPR Article 28 processor terms written for Kovi's actual processing. Have a solicitor or data protection adviser check before you rely on it. -->
+<h1>Kovi Data Processing Terms</h1>
+<p class="meta">Version {{VERSION}}. These terms form part of the <a href="/legal/terms">Terms of Service</a> between {{NAME}} ("<b>Kovi</b>") and the customer ("<b>you</b>"). They apply to personal data that Kovi handles for you when you use the Service, and are our contract with you under Article 28 of the UK GDPR.</p>
+
+<h2>1. Who is who</h2>
+<p>For the personal data of your drivers, office users and anyone else in the records you create (such as hire customers in handover records), <b>you are the controller</b> and <b>Kovi is your processor</b>. Kovi is a controller of its own account, billing, security and website data; that is covered in our <a href="/legal/privacy">Privacy Policy</a>, not here.</p>
+
+<h2>2. What we process for you</h2>
+<table>
+<tr><th>Subject matter</th><td>Running the Kovi vehicle check service for you.</td></tr>
+<tr><th>How long</th><td>While your account is open, plus the clear-out period in the Terms (section 6.4).</td></tr>
+<tr><th>Nature and purpose</th><td>Storing, organising, showing, sending (for example alert emails and reports) and deleting the records you and your drivers create, so you can run and evidence your vehicle checks.</td></tr>
+<tr><th>Types of personal data</th><td>Names, email addresses, login details (passwords and PINs stored only in protected form), phone location readings at the start and end of a check and the furthest distance moved during it, a count of how many sides of a vehicle the phone was carried past, timing of checks, photos (which may show people or number plates), vehicle registration numbers, licence and CPC confirmations (yes/no), mileage, notes, defect reports, and for handover records: the name of the person the vehicle was handed to, and their signature image.</td></tr>
+<tr><th>People it is about</th><td>Your drivers, your office users, and people named in handover records.</td></tr>
+</table>
+
+<h2>3. What we promise</h2>
+<ol>
+<li><b>Your instructions.</b> We process the personal data only on your documented instructions, which are these terms and your use of the Service, unless the law requires otherwise (in which case we will tell you first, unless the law forbids it). If we think an instruction breaks data protection law, we will tell you.</li>
+<li><b>Confidentiality.</b> Everyone with access to the data at Kovi is bound by confidentiality.</li>
+<li><b>Security.</b> We take the measures listed in section 6, which we believe are appropriate to the risk (Article 32).</li>
+<li><b>Sub-processors.</b> You give us general permission to use the sub-processors in section 5. We have written contracts with them that impose the same data protection obligations. We stay responsible to you for them. We will tell you by email at least 14 days before adding or replacing one, and you may object on reasonable data protection grounds. If we cannot resolve it, you can end the agreement.</li>
+<li><b>Helping you with people's rights.</b> If someone asks us to see, correct, delete or restrict their data, or objects, we will pass the request to you promptly rather than answer it ourselves. We will give you reasonable help to respond. The Service lets you view your records and download reports, and we can provide a full copy on request. We may charge a reasonable fee for help that takes unusual effort.</li>
+<li><b>Breaches.</b> If we become aware of a personal data breach affecting your data, we will tell you without undue delay, and aim to do so within 48 hours, with the information we have to help you decide whether you must report it. We will help with your investigation and notifications.</li>
+<li><b>Impact assessments.</b> We will give you reasonable help with data protection impact assessments and any consultation with the Information Commissioner's Office (ICO) about the Service. Using phone location to check on drivers is monitoring of workers; you will usually need to carry out an assessment of it yourself, and we suggest you do before you start.</li>
+<li><b>Return and deletion.</b> When the agreement ends, we return a copy of your data on request and then delete it, as set out in the Terms (section 6.4), unless the law requires us to keep it.</li>
+<li><b>Showing compliance.</b> We will give you the information you reasonably need to check that we comply with this article, and allow for audits by you or someone you appoint, on reasonable notice, during working hours, and no more than once a year (unless a breach or a regulator requires otherwise). You cover your own costs, and the auditor must keep what they see confidential.</li>
+</ol>
+
+<h2>4. What you promise</h2>
+<ol>
+<li>You have a lawful basis for the processing and for giving us the data, and you have given your drivers and other people the information the law requires (our <a href="/legal/driver-notice">Driver privacy notice</a> can be used for this).</li>
+<li>You decide what to ask your drivers to do in the app, you are responsible for what you do with flags and alerts, and you should make decisions about people using human judgement, not on a flag alone.</li>
+<li>You will not put in special category data (such as health information) or criminal records data other than incidentally in free-text notes, which you should avoid.</li>
+</ol>
+
+<h2>5. Sub-processors we use now</h2>
+<table>
+<tr><th>Who</th><th>What for</th><th>Where</th></tr>
+<tr><td>Google Cloud (Google Cloud EMEA Limited and Google LLC)</td><td>Hosting: the app server, the database, photo storage, scheduled jobs and secrets</td><td>Our data is stored in Google's London region (europe-west2)</td></tr>
+<tr><td>Resend (Plus Five Five, Inc.)</td><td>Sending alert and report emails (these contain vehicle registrations, driver names and report PDFs)</td><td>United States</td></tr>
+</table>
+<p>Where personal data goes outside the UK, it is protected by a recognised safeguard such as the UK International Data Transfer Agreement or the UK Addendum to the EU standard contractual clauses, or the UK-US data bridge where the provider is covered by it. If we add other providers (for example, for taking card payments), we will update this list and tell you as set out in section 3.4.</p>
+
+<h2>6. Security measures</h2>
+<ul>
+<li>All traffic is encrypted in transit (HTTPS). Data is encrypted at rest by our hosting provider.</li>
+<li>Passwords are stored only as salted bcrypt hashes. Driver PINs are stored only as keyed hashes and cannot be read back; they are shown once, when created.</li>
+<li>Each customer's data is kept separate in software: a user can only reach their own company's records, and only office users (admins) can view photos and the full history. Drivers see only their own checks from the last 7 days.</li>
+<li>Photos are kept in a private storage bucket that is not publicly accessible, and are only served to signed-in office users of the same company.</li>
+<li>Limits on repeated sign-in attempts, and daily automated database backups.</li>
+<li>Access to the production systems is limited to the people who run Kovi.</li>
+</ul>
+
+<h2>7. General</h2>
+<p>If these terms conflict with the Terms of Service on data protection, these terms win. Our liability under these terms is covered by the limits in section 9 of the Terms of Service. Contact: {{EMAIL}}.</p>
