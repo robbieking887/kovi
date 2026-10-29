@@ -7,6 +7,7 @@ const gbp = n => '£' + Number(n || 0).toFixed(2);
 const dt = s => s ? new Date(s).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2600); };
 const MAX_DIST = 50;
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 
 let me = null, co = null, view = 'home', tab = null, busy = false, ck = null, errMsg = '', authMode = 'in';
 let cache = {};
@@ -266,7 +267,7 @@ document.addEventListener('click', async e => {
   if (a === 'sync') return flush();
   if (a === 'start') return run(async () => {
     const v = (await vehicles()).find(x => x.id === d.id); await startSensors();
-    ck = { vehicle: v, id: crypto.randomUUID(), t0: Date.now(), step: 0, pos0: null, maxDist: 0, sectors: new Set(), h0: null, res: {}, defects: [], extra: [], mileage: '', notes: '' }; view = 'check'; onSensor();
+    ck = { vehicle: v, id: uuid(), t0: Date.now(), step: 0, pos0: null, maxDist: 0, sectors: new Set(), h0: null, res: {}, defects: [], extra: [], mileage: '', notes: '' }; view = 'check'; onSensor();
   });
   if (a === 'cancel') { if (confirm('Cancel this check?')) { stopSensors(); ck = null; view = 'home'; render(); } return; }
   if (a === 'lic') { ck.licence = d.v; return render(); }

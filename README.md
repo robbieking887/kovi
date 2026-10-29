@@ -27,3 +27,44 @@ Vehicle walkaround checks for fleets. Drivers check a vehicle on their phone, th
 
 ## Planned stack
 Next.js web app (driver app as an installable PWA), Supabase (database, auth, storage), Stripe (monthly invoicing), email alerts.
+
+# Kovi Fleet: the real app
+
+Everything is in this repo and already connected to your Supabase project (`gvkkivzasyfmqltnekow`, eu-west-1).
+
+## Go live in 5 minutes
+
+1. **Host the `web` folder.** Easiest: Netlify (netlify.com) > Add new site > Import from GitHub > pick `robbieking887/kovi`. Publish directory is already set to `web` (see `netlify.toml`). No build step. Vercel or Cloudflare Pages work the same way. It has to be HTTPS, which all of them give you free, because phones only allow GPS and compass on HTTPS.
+2. **Supabase > Authentication > Providers > Email:** turn **off** "Confirm email" so drivers can sign up and go straight in. (Or leave it on and drivers confirm by email first.)
+3. **Supabase > Authentication > URL configuration:** set Site URL to your Netlify address.
+4. **Create your company:** open the site, tap "Company owner? Create your company". You are the admin. People > shows your **driver code**.
+5. **Drivers:** each opens the site, taps "Driver? Join with a company code", makes their own login. Admins can promote any driver to admin under People. An admin sees everything and can also do checks.
+6. On a phone, "Add to Home Screen" makes it behave like an app.
+
+## Make yourself the platform owner (sees all customers, runs billing)
+
+Supabase > SQL editor:
+
+    update public.profiles set is_platform_admin = true where email = 'YOUR LOGIN EMAIL';
+
+A Platform tab appears with all customers and invoices.
+
+## Alert emails
+
+Alerts always show in the app. For emails: make a free Resend account (resend.com), then Supabase > Edge Functions > Secrets, add `RESEND_API_KEY`. Until you verify your own domain in Resend, it can only send to your own Resend email address. Once you verify a domain, also add the secret `MAIL_FROM` e.g. `Kovi <alerts@yourdomain.co.uk>`.
+
+## Billing
+
+- £1 per vehicle per week, any week started counts, 7-day blocks from the day added, VAT 20% (company setting).
+- Invoices are generated automatically on the 1st of each month at 02:10 (`pg_cron`). Admins see live usage and invoices under Billing; you can print or save as PDF. Platform tab > "Generate last month's invoices" runs it on demand (safe to repeat).
+- **Not built yet:** automatic card collection (Stripe) and Xero sync. Right now you mark invoices paid yourself (Platform tab). Both need your Stripe/Xero accounts and keys; say the word and they are next.
+
+## What is checked on each walkaround
+
+Plate photo, GPS position at the vehicle (flag if they move more than 50 m away), compass sweep of all 4 sides during the walk-round page, minimum time on each page, defects need a note (photo optional), declarations. Any failure creates an alert in the database (so the phone cannot skip it). Works offline: checks save on the phone and upload when signal returns.
+
+## Tests
+
+- Database permissions and billing maths were tested directly in Postgres (drivers cannot see alerts or add vehicles; companies cannot see each other; week counts).
+- `tests/ui-smoke.js` drives the app in a headless browser against a fake backend.
+- Not tested on a real phone yet: GPS accuracy and compass behaviour vary by phone, so do one real check yourself first.
