@@ -48,16 +48,16 @@ if gcloud secrets describe kovi-resend >/dev/null 2>&1; then SECRETS="$SECRETS,R
 # Legal details shown in the Terms and Privacy pages. Set these in your shell first, e.g.
 #   export LEGAL_NAME="Your Company Ltd" LEGAL_ADDRESS="1 High St, Glasgow G1 1AA" LEGAL_EMAIL="hello@yourdomain.co.uk" COMPANY_NUMBER=SC123456 ICO_NUMBER=ZA123456
 LEGAL_ENV=""
-for k in LEGAL_NAME LEGAL_ADDRESS LEGAL_EMAIL COMPANY_NUMBER ICO_NUMBER GOVERNING_LAW; do [ -n "${!k:-}" ] && LEGAL_ENV="$LEGAL_ENV@$k=${!k}"; done
+for k in LEGAL_NAME LEGAL_ADDRESS LEGAL_EMAIL COMPANY_NUMBER ICO_NUMBER GOVERNING_LAW; do [ -n "${!k:-}" ] && LEGAL_ENV="$LEGAL_ENV#$k=${!k}"; done
 [ -z "${LEGAL_NAME:-}" ] && echo "!! LEGAL_NAME is not set: the Terms and Privacy pages will show yellow placeholders until you set it and redeploy."
 
 echo "== Deploying the app to Cloud Run"
 gcloud run deploy kovi --source . --region "$REGION" --allow-unauthenticated \
   --add-cloudsql-instances "$PROJECT:$REGION:$SQL" \
-  --set-env-vars "^@^DB_HOST=/cloudsql/$PROJECT:$REGION:$SQL@DB_USER=$DBUSER@DB_NAME=$DB@BUCKET=$BUCKET@PLATFORM_ADMIN_EMAIL=$ADMIN_EMAIL${LEGAL_ENV}" \
+  --set-env-vars "^#^DB_HOST=/cloudsql/$PROJECT:$REGION:$SQL#DB_USER=$DBUSER#DB_NAME=$DB#BUCKET=$BUCKET#PLATFORM_ADMIN_EMAIL=$ADMIN_EMAIL${LEGAL_ENV}" \
   --set-secrets "$SECRETS" --min-instances=0 --max-instances=5 --memory=512Mi
 URL="$(gcloud run services describe kovi --region "$REGION" --format='value(status.url)')"
-gcloud run services update kovi --region "$REGION" --update-env-vars "^@^APP_URL=$URL" >/dev/null   # so emailed alerts can link back to the app
+gcloud run services update kovi --region "$REGION" --update-env-vars "^#^APP_URL=$URL" >/dev/null   # so emailed alerts can link back to the app
 
 echo "== Monthly invoice job (1st of each month, 02:10 London)"
 CRON="$(gcloud secrets versions access latest --secret=kovi-cron)"
