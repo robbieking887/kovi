@@ -141,12 +141,15 @@ function checkView() {
     <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;color:var(--ink)"><input type="checkbox" style="width:auto;margin:3px 0" data-a="d2" ${ck.d2 ? 'checked' : ''}>I have reported every defect I found.</label></div>
     <button class="b full" data-a="submit" id="nx" ${ck.d1 && ck.d2 ? '' : 'disabled'}>Submit check</button>`;
   } else {
-    const s = secs[ck.step - 1], r = ck.res[s.id];
+    const s = secs[ck.step - 1], r = ck.res[s.id], rep = ck.rep[s.id], nd = r.filter(x => x && !x.ok).length;
     h += `<div class="card"><h2>${esc(s.title)}</h2>${s.walk ? `<p class="mut">Walk all the way round the vehicle. Keep your phone with you.</p><div class="dial" id="dial">${dialSvg()}</div><p style="text-align:center" class="mut" id="cov">${ck.sectors.size}/4 sides</p>` : ''}
-    <button class="b sec full" data-a="allok" style="margin-bottom:8px">✓ Everything OK in this section</button>
-    ${s.items.map((it, j) => { const st = r[j]; return `<div class="item" style="flex-wrap:wrap"><div class="t">${esc(it)}</div><div class="seg" style="width:150px"><button data-a="pd" data-j="${j}" data-v="p" class="${st && st.ok ? 'on p' : ''}">Pass</button><button data-a="pd" data-j="${j}" data-v="d" class="${st && !st.ok ? 'on d' : ''}">Defect</button></div>
-      ${st && !st.ok ? `<div style="width:100%"><select data-a="sev" data-j="${j}"><option ${st.sev === 'minor' ? 'selected' : ''} value="minor">Minor (monitor)</option><option ${st.sev === 'major' ? 'selected' : ''} value="major">Major (fix soon)</option><option ${st.sev === 'danger' ? 'selected' : ''} value="danger">Dangerous (do not drive)</option></select><input placeholder="What is wrong? (required)" value="${esc(st.note)}" data-a="dnote" data-j="${j}"><input type="file" accept="image/*" capture="environment" data-a="dphoto" data-j="${j}">${st.url ? `<img class="photo" src="${st.url}">` : ''}</div>` : ''}</div>`; }).join('')}</div>
-    <div class="warn" id="lock"></div><button class="b full" data-a="next" id="nx" disabled>Next</button>`;
+    <p style="margin:10px 0 4px"><b>Have you checked:</b></p>
+    ${rep ? '' : `<ul style="margin:0 0 12px;padding-left:20px">${s.items.map(it => `<li>${esc(it)}</li>`).join('')}</ul>`}
+    ${rep ? s.items.map((it, j) => { const st = r[j]; return `<div class="item" style="flex-wrap:wrap"><div class="t">${esc(it)}</div><div class="seg" style="width:150px"><button data-a="pd" data-j="${j}" data-v="p" class="${!st || st.ok ? 'on p' : ''}">OK</button><button data-a="pd" data-j="${j}" data-v="d" class="${st && !st.ok ? 'on d' : ''}">Defect</button></div>
+      ${st && !st.ok ? `<div style="width:100%"><select data-a="sev" data-j="${j}"><option ${st.sev === 'minor' ? 'selected' : ''} value="minor">Minor (monitor)</option><option ${st.sev === 'major' ? 'selected' : ''} value="major">Major (fix soon)</option><option ${st.sev === 'danger' ? 'selected' : ''} value="danger">Dangerous (do not drive)</option></select><input placeholder="What is wrong? (required)" value="${esc(st.note)}" data-a="dnote" data-j="${j}"><input type="file" accept="image/*" capture="environment" data-a="dphoto" data-j="${j}">${st.url ? `<img class="photo" src="${st.url}">` : ''}</div>` : ''}</div>`; }).join('') : ''}
+    ${ck.conf[s.id] ? `<div class="pill ${nd ? 'warn' : 'ok'}" style="margin:6px 0">${nd ? nd + ' defect(s) noted' : '✓ Confirmed all OK'}</div>` : `<button class="b grn full" data-a="allok">${rep ? '✓ Confirm — everything else is OK' : '✓ Yes, all checked and OK'}</button>`}
+    ${rep ? '' : `<button class="b sec full" data-a="rep" style="margin-top:8px">Something is not right</button>`}</div>
+        <div class="warn" id="lock"></div><button class="b full" data-a="next" id="nx" disabled>Next</button>`;
   }
   return h;
 }
@@ -157,7 +160,7 @@ function gate() {
   const s = secs(), r = ck.res[s.id], left = Math.max(0, Math.ceil((ck.lockUntil - Date.now()) / 1000));
   let why = '';
   if (left > 0) why = `Take your time: ${left}s left on this page.`;
-  else if (r.some(x => !x)) why = 'Mark every item Pass or Defect (or use "Everything OK").';
+  else if (!ck.conf[s.id]) why = 'Tap the green button to confirm this section.';
   else if (r.some(x => x && !x.ok && !(x.note || '').trim())) why = 'Describe each defect.';
   else if (s.walk && ck.sectors.size < 4 && sens.heading != null) why = 'Keep walking round the vehicle — ' + ck.sectors.size + '/4 sides.';
   const L = $('#lock'); if (L) { L.style.display = why ? '' : 'none'; L.textContent = why; }
@@ -267,12 +270,13 @@ document.addEventListener('click', async e => {
   if (a === 'sync') return flush();
   if (a === 'start') return run(async () => {
     const v = (await vehicles()).find(x => x.id === d.id); await startSensors();
-    ck = { vehicle: v, id: uuid(), t0: Date.now(), step: 0, pos0: null, maxDist: 0, sectors: new Set(), h0: null, res: {}, defects: [], extra: [], mileage: '', notes: '' }; view = 'check'; onSensor();
+    ck = { vehicle: v, id: uuid(), t0: Date.now(), step: 0, pos0: null, maxDist: 0, sectors: new Set(), h0: null, res: {}, conf: {}, rep: {}, defects: [], extra: [], mileage: '', notes: '' }; view = 'check'; onSensor();
   });
   if (a === 'cancel') { if (confirm('Cancel this check?')) { stopSensors(); ck = null; view = 'home'; render(); } return; }
   if (a === 'lic') { ck.licence = d.v; return render(); }
-  if (a === 'allok') { const s = secs(); ck.res[s.id] = s.items.map(() => ({ ok: true })); return render(); }
-  if (a === 'pd') { const s = secs(), j = +d.j; ck.res[s.id][j] = d.v === 'p' ? { ok: true } : { ok: false, sev: 'minor', note: '' }; return render(); }
+  if (a === 'allok') { const s = secs(); ck.res[s.id] = ck.res[s.id].map(x => x || { ok: true }); ck.conf[s.id] = true; return render(); }
+  if (a === 'rep') { ck.rep[secs().id] = true; return render(); }
+  if (a === 'pd') { const s = secs(), j = +d.j; ck.res[s.id][j] = d.v === 'p' ? { ok: true } : { ok: false, sev: 'minor', note: '' }; ck.conf[s.id] = false; return render(); }
   if (a === 'next') return run(async () => {
     if (ck.step === 0) { ck.mileage = $('#mil').value; enterStep(1); }
     else if (ck.step === co.checklist.length) { enterStep('fin'); }

@@ -35,7 +35,7 @@ storage:{from(){return{upload:async(p,b)=>{window.__up.push(p);return{error:null
   console.log('coverage text:', await p.locator('#cov').innerText());
   await p.waitForFunction(() => !document.querySelector('#nx').disabled, null, { timeout: 5000 }); await p.click('#nx');
   // third: one defect
-  await p.click('[data-a=pd][data-v=d]'); await p.fill('[data-a=dnote]', 'Cracked'); await p.waitForTimeout(1200);
+  await p.click('[data-a=rep]'); await p.click('[data-a=pd][data-v=d]'); await p.fill('[data-a=dnote]', 'Cracked'); await p.click('[data-a=allok]'); await p.waitForTimeout(1200);
   console.log('next disabled with defect noted:', await p.locator('#nx').isDisabled()); await p.click('#nx');
   await p.check('[data-a=d1]'); await p.check('[data-a=d2]'); await p.click('#nx');
   await p.waitForSelector('text=Saved');
