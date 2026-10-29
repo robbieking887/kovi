@@ -18,7 +18,7 @@ gcloud services enable run.googleapis.com sqladmin.googleapis.com storage.google
 
 secret() { # name value : create if missing, never overwrite
   if ! gcloud secrets describe "$1" >/dev/null 2>&1; then printf '%s' "$2" | gcloud secrets create "$1" --data-file=- --replication-policy=automatic; fi
-  gcloud secrets add-iam-policy-binding "$1" --member="serviceAccount:$RUNSA" --role=roles/secretmanager.secretAccessor >/dev/null
+  gcloud secrets add-iam-policy-binding "$1" --member="serviceAccount:$RUNSA" --role=roles/secretmanager.secretAccessor --condition=None >/dev/null
 }
 
 echo "== Database (Cloud SQL Postgres, smallest size, daily backups)"
@@ -33,8 +33,8 @@ fi
 
 echo "== Photo storage bucket"
 gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1 || gcloud storage buckets create "gs://$BUCKET" --location="$REGION" --uniform-bucket-level-access --public-access-prevention
-gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$RUNSA" --role=roles/storage.objectAdmin >/dev/null
-gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$RUNSA" --role=roles/cloudsql.client >/dev/null
+gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$RUNSA" --role=roles/storage.objectAdmin --condition=None >/dev/null
+gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$RUNSA" --role=roles/cloudsql.client --condition=None >/dev/null
 
 echo "== Secrets"
 secret kovi-jwt "$(openssl rand -hex 32)"
