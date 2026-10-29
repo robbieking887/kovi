@@ -1,10 +1,9 @@
 -- Kovi Fleet: schema, RLS, billing functions
-create extension if not exists pgcrypto;
 
 create table public.companies (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  join_code text not null unique default upper(substr(encode(gen_random_bytes(6),'hex'),1,8)),
+  join_code text not null unique default upper(substr(replace(gen_random_uuid()::text,'-',''),1,8)),
   alert_email text,
   billing_email text,
   vat_on boolean not null default true,
@@ -110,7 +109,7 @@ create policy co_sel on public.companies for select using (id = public.my_compan
 create policy co_upd on public.companies for update using (id = public.my_company() and public.is_admin()) with check (id = public.my_company());
 
 create policy pr_sel on public.profiles for select using (id = auth.uid() or company_id = public.my_company() or public.is_platform());
-create policy pr_upd on public.profiles for update using (company_id = public.my_company() and public.is_admin()) with check (company_id = public.my_company());
+create policy pr_upd on public.profiles for update using (company_id = public.my_company() and public.is_admin() and id <> auth.uid()) with check (company_id = public.my_company());
 
 create policy ve_sel on public.vehicles for select using (company_id = public.my_company() or public.is_platform());
 create policy ve_ins on public.vehicles for insert with check (company_id = public.my_company() and public.is_admin());
