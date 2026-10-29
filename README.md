@@ -30,7 +30,7 @@ Next.js web app (driver app as an installable PWA), Supabase (database, auth, st
 
 # Kovi Fleet: the real app (Google Cloud)
 
-One small Node service on **Cloud Run** serves the app and the API. Data lives in **Cloud SQL (Postgres)**, photos in **Cloud Storage**, and **Cloud Scheduler** raises invoices on the 1st of each month.
+One small Node service on **Cloud Run** serves the app and the API. Data lives in **Cloud SQL (Postgres)**, photos in **Cloud Storage**, and **Cloud Scheduler** raises invoices on the 1st of each month and runs a 15-minute job for reminders and reports.
 
 ## Go live (about 15 minutes, one time)
 
@@ -42,7 +42,7 @@ One small Node service on **Cloud Run** serves the app and the API. Data lives i
         ./deploy.sh YOUR_PROJECT_ID you@youremail.com
 
    The email is yours: whoever signs up with that address becomes the **platform owner** (sees all customers, runs billing). It prints your live web address when done.
-4. Open the address on your phone, tap **Company owner? Create your company**, sign up with that email. Share the **driver code** (People tab) and each driver makes their own login.
+4. Open the address on your phone, tap **Company owner? Create your company**, sign up with that email. In the **People** tab add each driver by name: they get a 6 digit PIN (shown once). Drivers sign in with the company code plus their PIN, no email or password, and several drivers can share one depot phone (**Switch driver**).
 5. "Add to Home Screen" on the phone for an app icon. Google gives you an https address automatically, which phones need for GPS and compass. Add your own domain later in Cloud Run > Manage custom domains.
 
 To update after any change: pull the latest and run `./deploy.sh` again with the same arguments. It keeps your data.
@@ -54,15 +54,34 @@ Alerts always show in the app. For email, make a free Resend account and re-run 
 - **Pricing:** £1 per vehicle per week, any week started counts, 7-day blocks from the day added, VAT 20%. Invoices are created automatically on the 1st (Cloud Scheduler); the Platform tab can run it on demand (safe to repeat).
 - **Drivers** see only their own last 7 days. **Admins** see all time (History tab, filter by vehicle, driver, date, result). An admin can also do checks. Nothing is ever deleted.
 - **Checks:** per section the driver confirms the listed items in one tap, or reports a defect. Plate photo, GPS within 50 m of the vehicle, compass sweep of all 4 sides on the walk-round, minimum time per page. Failures create alerts on the server.
-- Works offline: checks save on the phone and upload when signal returns.
+- Works offline: checks (and handovers) save on the phone, with the driver's identity, and upload when signal returns.
+
+## Features
+- **QR code per vehicle** (Vehicles tab, print the sheet). Scanning opens that vehicle straight into its check.
+- **Everything defaults to OK**: drivers confirm a section with one tap and only touch items that are wrong.
+- **Custom checklists**: build per vehicle type from ready-made presets. Items can be tick, number (e.g. tyre pressure) or photo; "if it fails, ask for a photo" can be none / optional / required; GPS can be turned off for indoor sites.
+- **Tractor + trailer in one check**, with trailer-only sections. Trailers count (and are billed) as vehicles.
+- **Defect loop**: reported, assigned (to a mechanic or garage), fixed with a photo, and the next driver sees "fixed". The same fault reported by several drivers is one defect. A "dangerous" defect raises a do-not-drive alert (it does not lock the vehicle).
+- **"Who hasn't checked?"** alert at a time you choose, on the days you choose.
+- **MOT / tax / service / PMI reminders** to the alert email (30, 14, 7, 1 days and on the day, then weekly while overdue).
+- **Weekly PDF report** emailed every Monday, plus a PDF for any period (up to 3 months) in the Reports tab.
+- **Hire / handover records**: guided photos, mileage, fuel, who it went to, signature, time and location. Switch on in Settings.
+
+## Before you go live
+1. Set `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_EMAIL`, `COMPANY_NUMBER`, `ICO_NUMBER` (and `GOVERNING_LAW`, default Scotland) in your shell before `./deploy.sh`. Until set, the legal pages show yellow placeholders.
+2. **Have a solicitor read the Terms, Data Processing Terms, Privacy Notice and Driver Notice** (`server/legal/`). They are original drafts written for UK law, not legal advice, and have not been reviewed.
+3. Register with the **ICO** (data protection fee) and give your customers' drivers the Driver Notice.
+4. Verify a sending domain with Resend, or alerts and reports only reach your own address.
 
 ## Cost
 Roughly £25-35/month once the free credit ends (Cloud SQL smallest instance is most of it; Cloud Run scales to zero; photo storage is pennies). Check Google's current pricing.
 
 ## Not built yet
-Automatic card collection (Stripe) and Xero sync. Invoices are viewable/printable and you mark them paid by hand.
+- Automatic card collection (Stripe) and Xero sync. Invoices are viewable and you mark them paid by hand.
+- Pricing tiers: the platform owner can set a different price per customer, but there are no Standard/Pro plans.
+- A missed check alerts the manager only. It does not message the driver first.
 
 ## Tests
-`tests/e2e.js` drives the real app in a headless browser against a running server and Postgres (signup, driver join, check with defect, alerts, History, photos, permissions, billing). The Google Cloud deploy script itself could not be run from where it was written, so expect to fix a typo or a permission prompt on the first run.
+`node tests/api.js http://localhost:8099` runs 92 server checks (PIN login and rate limiting, templates, defects, trailers, reminders, missed-check alerts, PDF, permissions). `node tests/e2e.js http://localhost:8099` drives the real app in a headless browser (sign-up, builder, PIN login, QR link, full check, offline queue, handover, defect loop, PDF, QR sheet). Both need the server running with `TEST_MODE=1`. The Google Cloud deploy script itself could not be run from where it was written, so expect to fix a typo or a permission prompt on the first run.
 
 The earlier Supabase version is kept in `legacy/` for reference.

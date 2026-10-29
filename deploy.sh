@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploys Kovi to Google Cloud: Cloud Run (app) + Cloud SQL Postgres (data) + Cloud Storage (photos) + Cloud Scheduler (monthly invoices).
+# Deploys Kovi to Google Cloud: Cloud Run (app) + Cloud SQL Postgres (data) + Cloud Storage (photos) + Cloud Scheduler (monthly invoices + 15-minute reminders).
 # Safe to re-run: it reuses what exists and just redeploys the app.
 # Usage:  ./deploy.sh YOUR_GCP_PROJECT_ID you@yourmail.com [RESEND_API_KEY]
 set -euo pipefail
@@ -45,17 +45,28 @@ if [ -n "$RESEND" ]; then
 fi
 if gcloud secrets describe kovi-resend >/dev/null 2>&1; then SECRETS="$SECRETS,RESEND_API_KEY=kovi-resend:latest"; fi
 
+# Legal details shown in the Terms and Privacy pages. Set these in your shell first, e.g.
+#   export LEGAL_NAME="Your Company Ltd" LEGAL_ADDRESS="1 High St, Glasgow G1 1AA" LEGAL_EMAIL="hello@yourdomain.co.uk" COMPANY_NUMBER=SC123456 ICO_NUMBER=ZA123456
+LEGAL_ENV=""
+for k in LEGAL_NAME LEGAL_ADDRESS LEGAL_EMAIL COMPANY_NUMBER ICO_NUMBER GOVERNING_LAW; do [ -n "${!k:-}" ] && LEGAL_ENV="$LEGAL_ENV@$k=${!k}"; done
+[ -z "${LEGAL_NAME:-}" ] && echo "!! LEGAL_NAME is not set: the Terms and Privacy pages will show yellow placeholders until you set it and redeploy."
+
 echo "== Deploying the app to Cloud Run"
 gcloud run deploy kovi --source . --region "$REGION" --allow-unauthenticated \
   --add-cloudsql-instances "$PROJECT:$REGION:$SQL" \
-  --set-env-vars "DB_HOST=/cloudsql/$PROJECT:$REGION:$SQL,DB_USER=$DBUSER,DB_NAME=$DB,BUCKET=$BUCKET,PLATFORM_ADMIN_EMAIL=$ADMIN_EMAIL" \
+  --set-env-vars "^@^DB_HOST=/cloudsql/$PROJECT:$REGION:$SQL@DB_USER=$DBUSER@DB_NAME=$DB@BUCKET=$BUCKET@PLATFORM_ADMIN_EMAIL=$ADMIN_EMAIL${LEGAL_ENV}" \
   --set-secrets "$SECRETS" --min-instances=0 --max-instances=5 --memory=512Mi
 URL="$(gcloud run services describe kovi --region "$REGION" --format='value(status.url)')"
+gcloud run services update kovi --region "$REGION" --update-env-vars "^@^APP_URL=$URL" >/dev/null   # so emailed alerts can link back to the app
 
 echo "== Monthly invoice job (1st of each month, 02:10 London)"
 CRON="$(gcloud secrets versions access latest --secret=kovi-cron)"
 ARGS=(--location="$REGION" --schedule="10 2 1 * *" --time-zone=Europe/London --uri="$URL/api/cron/invoices" --http-method=POST --headers="x-cron-secret=$CRON")
 gcloud scheduler jobs describe kovi-invoices --location="$REGION" >/dev/null 2>&1 && gcloud scheduler jobs update http kovi-invoices "${ARGS[@]}" || gcloud scheduler jobs create http kovi-invoices "${ARGS[@]}"
+
+echo "== Reminder job (every 15 minutes: missed-check alerts, MOT/tax/service reminders, Monday PDF report)"
+TARGS=(--location="$REGION" --schedule="*/15 * * * *" --time-zone=Europe/London --uri="$URL/api/cron/tick" --http-method=POST --headers="x-cron-secret=$CRON")
+gcloud scheduler jobs describe kovi-tick --location="$REGION" >/dev/null 2>&1 && gcloud scheduler jobs update http kovi-tick "${TARGS[@]}" || gcloud scheduler jobs create http kovi-tick "${TARGS[@]}"
 
 echo
 echo "DONE. Kovi is live at: $URL"

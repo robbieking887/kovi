@@ -29,3 +29,13 @@ label{font-size:13px;font-weight:600;color:var(--mut)}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#101828;color:#fff;padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:.2s;z-index:20}#toast.on{opacity:1}
 .big{font-size:28px;font-weight:800}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .photo{width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-top:6px}
+.foot{text-align:center;font-size:13px;color:var(--mut);margin:24px 0 8px}.foot a,.mut a{color:var(--mut)}
+.seg button.on{background:var(--acc);color:var(--accink);border-color:var(--acc)}
+nav button{white-space:nowrap}
+.sig{width:100%;height:150px;border:2px dashed var(--line);border-radius:10px;background:#fff;display:block;margin:4px 0 8px}
+select.sm{width:auto}
+.pill.warn,.warn{word-break:break-word}
+header{padding-top:max(12px,env(safe-area-inset-top))}
+.item .b.sm{flex:none}
+.item[data-a]:active{background:var(--bg)}
+mark{background:#fef08a}

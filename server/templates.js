@@ -64,6 +64,8 @@ const PRESETS = {
   forklift: { name: 'Forklift / plant', desc: 'Counterbalance or telehandler. GPS check is off by default (indoors).', settings: { gps: false }, sections: [
     sec('prep', 'Before you start', 4, [ck('Seat belt or restraint'), ck('Horn, lights and beacon'), ck('Brakes and steering'), ck('Parking brake'), { label: 'Hour meter reading', kind: 'number', unit: 'hrs', required: true }]),
     sec('out', 'Walk round machine', 8, [ck('Forks and carriage'), ck('Mast and chains'), ck('Hydraulic hoses and leaks'), ck('Tyres and wheels'), ck('Guards and load backrest'), ck('Battery or fuel / gas')], { walk: true })] },
+  trailer: { name: 'Trailer only', desc: 'For checking a trailer on its own, away from the tractor unit.', sections: [
+    sec('trl', 'Trailer', 8, [ck('Coupling, air lines and electrical connection'), ck('Landing legs'), ck('Tyres and wheel nuts'), ck('Lights, reflectors and number plates'), ck('Curtains, doors and tail lift'), ck('Floor and body condition')], { walk: true })] },
   blank: { name: 'Blank', desc: 'Start from nothing and build your own.', sections: [sec('s1', 'Checks', 5, [ck('First item')], { walk: true })] },
 };
 const presetSections = key => JSON.parse(JSON.stringify((PRESETS[key] || PRESETS.hgv).sections));
