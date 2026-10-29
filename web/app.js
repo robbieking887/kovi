@@ -1,6 +1,13 @@
 (() => {
 'use strict';
-const sb = supabase.createClient(KOVI.url, KOVI.key, { auth: { persistSession: true, autoRefreshToken: true } });
+let token = ''; try { token = localStorage.getItem('kovi_t') || ''; } catch (e) {}
+const setToken = t => { token = t || ''; try { t ? localStorage.setItem('kovi_t', t) : localStorage.removeItem('kovi_t'); } catch (e) {} };
+async function api(method, url, body, raw) {
+  const r = await fetch(url, { method, headers: Object.assign({ Authorization: 'Bearer ' + token }, raw ? { 'Content-Type': 'image/jpeg' } : body ? { 'Content-Type': 'application/json' } : {}), body: raw ? raw : body ? JSON.stringify(body) : undefined });
+  let j = null; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) { const e = new Error((j && j.error) || 'Something went wrong (' + r.status + ')'); e.status = r.status; throw e; }
+  return j;
+}
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const gbp = n => '£' + Number(n || 0).toFixed(2);
@@ -19,17 +26,13 @@ const qall = async () => { const d = await idb(); return new Promise(res => { co
 const qdel = async id => { const d = await idb(); return new Promise(res => { const t = d.transaction('q', 'readwrite'); t.objectStore('q').delete(id); t.oncomplete = res; }); };
 
 async function submitRow(row, photos) {
-  for (const p of photos) {
-    const { error } = await sb.storage.from('check-photos').upload(p.path, p.blob, { contentType: 'image/jpeg', upsert: true });
-    if (error) throw error;
-  }
-  const { error } = await sb.from('checks').upsert(row, { onConflict: 'id', ignoreDuplicates: true });
-  if (error) throw error;
+  for (const p of photos) await api('POST', `/api/photos/${row.id}/${p.name}`, null, p.blob);
+  await api('POST', '/api/checks', row);
 }
 async function flush() {
   if (!navigator.onLine || !me) return;
   let n = 0;
-  for (const q of await qall()) { try { await submitRow(q.row, q.photos); await qdel(q.id); n++; } catch (e) { console.warn('sync failed', e); break; } }
+  for (const q of await qall()) { try { await submitRow(q.row, q.photos); await qdel(q.id); n++; } catch (e) { console.warn('sync failed', e); if (e.status === 401) break; if (e.status && e.status < 500) { await qdel(q.id); continue; } break; } }
   if (n) { toast(n + ' saved check' + (n > 1 ? 's' : '') + ' synced'); cache = {}; render(); }
 }
 window.addEventListener('online', flush);
@@ -74,11 +77,9 @@ const dialSvg = () => { let s = '<svg viewBox="-75 -75 150 150">'; for (let i = 
 
 /* ---------- auth + boot ---------- */
 async function loadMe() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) { me = null; co = null; return; }
-  const { data: p } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-  me = p || { id: session.user.id, company_id: null, email: session.user.email, role: 'driver' };
-  if (me.company_id) { const { data: c } = await sb.from('companies').select('*').eq('id', me.company_id).maybeSingle(); co = c; }
+  if (!token) { me = null; co = null; return; }
+  try { const r = await api('GET', '/api/me'); me = r.me; co = r.co; }
+  catch (e) { if (e.status === 401) { setToken(''); me = co = null; } else if (!me) { throw e; } }
 }
 async function run(fn) { if (busy) return; busy = true; errMsg = ''; try { await fn(); } catch (e) { errMsg = e.message || String(e); } busy = false; render(); }
 
@@ -87,7 +88,7 @@ const isAdmin = () => me && me.role === 'admin';
 function shell(body) {
   const tabs = [];
   if (me.is_platform_admin) tabs.push(['platform', 'Platform']);
-  if (co) { tabs.push(['home', 'Check'], ['hist', 'My checks']); if (isAdmin()) tabs.push(['today', 'Today'], ['alerts', 'Alerts'], ['vehicles', 'Vehicles'], ['people', 'People'], ['checklist', 'Checklist'], ['billing', 'Billing']); }
+  if (co) { tabs.push(['home', 'Check'], ['hist', 'My checks']); if (isAdmin()) tabs.push(['today', 'Today'], ['alerts', 'Alerts'], ['all', 'History'], ['vehicles', 'Vehicles'], ['people', 'People'], ['checklist', 'Checklist'], ['billing', 'Billing']); }
   return `<header><b>KOVI</b><small>${esc(co ? co.name : '')}</small><span class="sp"></span><small>${esc(me.full_name || me.email)}</small><button class="b sec sm" data-a="out" style="color:#fff;border-color:#ffffff55">Sign out</button></header>
   <nav>${tabs.map(t => `<button data-a="tab" data-v="${t[0]}" class="${view === t[0] ? 'on' : ''}">${t[1]}${t[0] === 'alerts' && cache.openAlerts ? ' (' + cache.openAlerts + ')' : ''}</button>`).join('')}</nav>
   <main>${errMsg ? `<div class="err">${esc(errMsg)}</div>` : ''}${body}</main>`;
@@ -108,16 +109,16 @@ function authView() {
 async function render() {
   const app = $('#app');
   if (!me) { app.innerHTML = authView(); return; }
-  if (!co && !me.is_platform_admin) { app.innerHTML = shell('<div class="card"><h2>No company yet</h2><p>Sign out and create or join a company.</p></div>'); return; }
+  if (!co) { app.innerHTML = shell('<div class="card"><h2>No company yet</h2><p>Sign out and create or join a company.</p></div>'); return; }
   if (ck && view === 'check') { app.innerHTML = shell(checkView()); gate(); return; }
   let body = '';
-  try { body = await ({ home: homeView, hist: histView, today: todayView, alerts: alertsView, vehicles: vehiclesView, people: peopleView, checklist: checklistView, billing: billingView, platform: platformView }[view] || homeView)(); } catch (e) { body = `<div class="err">${esc(e.message)}</div>`; }
+  try { body = await ({ home: homeView, hist: histView, all: allView, today: todayView, alerts: alertsView, vehicles: vehiclesView, people: peopleView, checklist: checklistView, billing: billingView, platform: platformView }[view] || homeView)(); } catch (e) { body = `<div class="err">${esc(e.message)}</div>`; }
   app.innerHTML = shell(body);
-  if (isAdmin()) sb.from('alerts').select('id', { count: 'exact', head: true }).eq('resolved', false).then(r => { const n = r.count || 0; if (n !== cache.openAlerts) { cache.openAlerts = n; const b = document.querySelector('nav [data-v="alerts"]'); if (b) b.textContent = 'Alerts' + (n ? ' (' + n + ')' : ''); } });
+  if (isAdmin()) api('GET', '/api/alerts/count').then(r => { const n = r.n || 0; if (n !== cache.openAlerts) { cache.openAlerts = n; const b = document.querySelector('nav [data-v="alerts"]'); if (b) b.textContent = 'Alerts' + (n ? ' (' + n + ')' : ''); } });
 }
 
 /* ---------- driver ---------- */
-async function vehicles() { const { data } = await sb.from('vehicles').select('*').eq('company_id', co.id).is('removed_on', null).order('reg'); return data || []; }
+const vehicles = () => api('GET', '/api/vehicles');
 async function homeView() {
   const vs = await vehicles(); const q = (await qall()).length;
   return `<h1>Select your vehicle</h1>${q ? `<div class="warn">${q} check${q > 1 ? 's' : ''} saved on this phone, waiting for signal. <a href="#" data-a="sync">Try now</a></div>` : ''}
@@ -180,12 +181,12 @@ async function submitCheck() {
   if (secsTaken < minTotal) flags.push('too_fast');
   const defects = [], results = {}, photos = [];
   const base = `${co.id}/${ck.id}/`;
-  photos.push({ path: base + 'plate.jpg', blob: ck.plate });
-  ck.extra.forEach((x, i) => photos.push({ path: base + 'extra' + i + '.jpg', blob: x.blob }));
+  photos.push({ name: 'plate.jpg', blob: ck.plate });
+  ck.extra.forEach((x, i) => photos.push({ name: 'extra' + i + '.jpg', blob: x.blob }));
   co.checklist.forEach(s => { results[s.id] = ck.res[s.id].map((x, j) => {
-    if (!x.ok) { let p = null; if (x.blob) { p = base + s.id + '-' + j + '.jpg'; photos.push({ path: p, blob: x.blob }); } defects.push({ section: s.title, item: s.items[j], severity: x.sev || 'minor', note: x.note, photo: p }); }
+    if (!x.ok) { let p = null; if (x.blob) { const nm = s.id + '-' + j + '.jpg'; p = base + nm; photos.push({ name: nm, blob: x.blob }); } defects.push({ section: s.title, item: s.items[j], severity: x.sev || 'minor', note: x.note, photo: p }); }
     return x.ok ? 1 : 0; }); });
-  const row = { id: ck.id, company_id: co.id, vehicle_id: ck.vehicle.id, driver_id: me.id, started_at: new Date(ck.t0).toISOString(), finished_at: new Date(ended).toISOString(),
+  const row = { id: ck.id, vehicle_id: ck.vehicle.id, started_at: new Date(ck.t0).toISOString(), finished_at: new Date(ended).toISOString(),
     start_lat: ck.pos0 && ck.pos0.latitude, start_lng: ck.pos0 && ck.pos0.longitude, start_acc: ck.pos0 && ck.pos0.accuracy, end_lat: sens.pos && sens.pos.latitude, end_lng: sens.pos && sens.pos.longitude,
     distance_m: Math.round(ck.maxDist), heading_coverage: ck.sectors.size, duration_secs: secsTaken, plate_photo: base + 'plate.jpg', licence: ck.licence, mileage: parseInt(ck.mileage) || null,
     results, defects, notes: ck.notes, flags, verdict: flags.length ? 'flagged' : defects.length ? 'defect' : 'pass' };
@@ -201,34 +202,45 @@ function resultView() {
   ${row.defects.length ? `<p>${row.defects.length} defect(s) reported</p>` : ''}<button class="b full" data-a="tab" data-v="home">Done</button></div>`;
 }
 async function histView() {
-  const { data } = await sb.from('checks').select('*, vehicles(reg)').eq('driver_id', me.id).order('started_at', { ascending: false }).limit(30);
-  return `<h1>My checks</h1><div class="card">${(data || []).map(c => `<div class="item"><div class="t"><b>${esc(c.vehicles && c.vehicles.reg)}</b><div class="mut">${dt(c.started_at)}</div></div>${pill(c.verdict)}</div>`).join('') || '<p class="mut">None yet.</p>'}</div>`;
+  const data = await api('GET', '/api/checks/mine');
+  return `<h1>My checks</h1><p class="mut">Your last 7 days. Your manager can see the full history.</p><div class="card">${(data || []).map(c => `<div class="item"><div class="t"><b>${esc(c.reg)}</b><div class="mut">${dt(c.started_at)}</div></div>${pill(c.verdict)}</div>`).join('') || '<p class="mut">None yet.</p>'}</div>`;
 }
 const pill = v => `<span class="pill ${v === 'pass' ? 'ok' : v === 'defect' ? 'warn' : 'bad'}">${v}</span>`;
 
 /* ---------- admin ---------- */
+function checkRows(checks) {
+  const open = cache.open;
+  return checks.map(c => `<div class="item" style="flex-wrap:wrap"><div class="t" data-a="open" data-id="${c.id}"><b>${esc(c.reg)}</b> · ${esc(c.full_name)}<div class="mut">${dt(c.started_at)} · ${c.duration_secs}s · ${c.heading_coverage}/4 sides · ${Math.round(c.distance_m || 0)} m${c.fixed ? ' · fixed' : ''}</div></div>${pill(c.verdict)}
+  ${open === c.id ? `<div style="width:100%" class="mut">${(c.flags || []).map(f => '<div>⚑ ' + esc(f) + '</div>').join('')}${(c.defects || []).map(d => `<div><b>${esc(d.severity)}</b> ${esc(d.section)} – ${esc(d.item)}: ${esc(d.note)} ${d.photo ? `<a href="#" data-a="photo" data-p="${esc(d.photo)}">photo</a>` : ''}</div>`).join('')}<div>${c.licence ? 'Licence/CPC: ' + esc(c.licence) + ' · ' : ''}${c.mileage ? c.mileage + ' mi · ' : ''}<a href="#" data-a="photo" data-p="${esc(c.plate_photo)}">Reg photo</a> ${c.start_lat ? `· <a target="_blank" rel="noopener" href="https://www.google.com/maps?q=${c.start_lat},${c.start_lng}">Map</a>` : ''} ${c.notes ? '· ' + esc(c.notes) : ''}</div>${c.verdict !== 'pass' && !c.fixed ? `<button class="b sm" data-a="fix" data-id="${c.id}">Mark as fixed</button>` : ''}</div>` : ''}</div>`).join('');
+}
 async function todayView() {
   const start = new Date(); start.setHours(0, 0, 0, 0);
-  const [vs, cs] = await Promise.all([vehicles(), sb.from('checks').select('*, vehicles(reg), profiles(full_name)').gte('started_at', start.toISOString()).order('started_at', { ascending: false })]);
-  const checks = cs.data || [], done = new Set(checks.map(c => c.vehicle_id)), missing = vs.filter(v => !done.has(v.id));
-  const open = cache.open;
+  const [vs, checks] = await Promise.all([vehicles(), api('GET', '/api/checks/today?since=' + encodeURIComponent(start.toISOString()))]);
+  const done = new Set(checks.map(c => c.vehicle_id)), missing = vs.filter(v => !done.has(v.id));
   return `<h1>Today</h1><div class="grid"><div class="card"><div class="big">${done.size}/${vs.length}</div><div class="mut">vehicles checked</div></div><div class="card"><div class="big">${checks.filter(c => c.verdict !== 'pass' && !c.fixed).length}</div><div class="mut">need attention</div></div></div>
   ${missing.length ? `<div class="card"><h2>Not checked yet</h2><p class="mut">${missing.map(v => esc(v.reg)).join(', ')}</p></div>` : ''}
-  <div class="card"><h2>Checks</h2>${checks.map(c => `<div class="item" style="flex-wrap:wrap"><div class="t" data-a="open" data-id="${c.id}"><b>${esc(c.vehicles.reg)}</b> · ${esc(c.profiles && c.profiles.full_name)}<div class="mut">${dt(c.started_at)} · ${c.duration_secs}s · ${c.heading_coverage}/4 sides · ${c.distance_m} m${c.fixed ? ' · fixed' : ''}</div></div>${pill(c.verdict)}
-  ${open === c.id ? `<div style="width:100%" class="mut">${(c.flags || []).map(f => '<div>⚑ ' + esc(f) + '</div>').join('')}${(c.defects || []).map(d => `<div><b>${esc(d.severity)}</b> ${esc(d.section)} – ${esc(d.item)}: ${esc(d.note)} ${d.photo ? `<a href="#" data-a="photo" data-p="${esc(d.photo)}">photo</a>` : ''}</div>`).join('')}<div><a href="#" data-a="photo" data-p="${esc(c.plate_photo)}">Reg photo</a> ${c.start_lat ? `· <a target="_blank" rel="noopener" href="https://www.google.com/maps?q=${c.start_lat},${c.start_lng}">Map</a>` : ''} ${c.notes ? '· ' + esc(c.notes) : ''}</div>${c.verdict !== 'pass' && !c.fixed ? `<button class="b sm" data-a="fix" data-id="${c.id}">Mark as fixed</button>` : ''}</div>` : ''}</div>`).join('') || '<p class="mut">No checks yet today.</p>'}</div>`;
+  <div class="card"><h2>Checks</h2>${checkRows(checks) || '<p class="mut">No checks yet today.</p>'}</div>`;
+}
+async function allView() {
+  const f = cache.f || {}, qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
+  const [vs, people, checks] = await Promise.all([api('GET', '/api/vehicles/all'), api('GET', '/api/people'), api('GET', '/api/checks?' + qs)]);
+  const sel = (id, label, opts, cur) => `<select id="${id}" data-a="filt" style="margin:0"><option value="">${label}</option>${opts.map(o => `<option value="${o[0]}" ${cur === o[0] ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
+  return `<h1>History</h1><p class="mut">Every check, all time. Latest 300 shown, use the filters to narrow it down.</p><div class="card"><div class="grid">${sel('f-vehicle', 'All vehicles', vs.map(v => [v.id, v.reg]), f.vehicle)}${sel('f-driver', 'All drivers', people.map(p => [p.id, p.full_name]), f.driver)}${sel('f-verdict', 'Any result', [['pass', 'Pass'], ['defect', 'Defects'], ['flagged', 'Flagged']], f.verdict)}<span></span>
+  <input type="date" id="f-from" data-a="filt" value="${esc(f.from || '')}" style="margin:0"><input type="date" id="f-to" data-a="filt" value="${esc(f.to || '')}" style="margin:0"></div></div>
+  <div class="card"><h2>${checks.length} check(s)</h2>${checkRows(checks) || '<p class="mut">Nothing matches.</p>'}</div>`;
 }
 async function alertsView() {
-  const { data } = await sb.from('alerts').select('*').order('created_at', { ascending: false }).limit(60);
+  const data = await api('GET', '/api/alerts');
   return `<h1>Alerts</h1><div class="card">${(data || []).map(a => `<div class="item"><div class="t" style="${a.resolved ? 'opacity:.5' : ''}">${esc(a.message)}<div class="mut">${dt(a.created_at)}</div></div>${a.resolved ? '' : `<button class="b sm sec" data-a="resolve" data-id="${a.id}">Done</button>`}</div>`).join('') || '<p class="mut">All quiet.</p>'}</div>`;
 }
 async function vehiclesView() {
-  const { data } = await sb.from('vehicles').select('*').eq('company_id', co.id).order('reg');
+  const data = await api('GET', '/api/vehicles/all');
   const act = (data || []).filter(v => !v.removed_on);
   return `<h1>Vehicles</h1><div class="card"><div class="row"><input id="reg" placeholder="Reg e.g. AB12 CDE" autocapitalize="characters"><select id="vt" class="n" style="width:auto">${['Truck', 'Lorry', 'Van', 'Car', 'Trailer', 'Other'].map(t => `<option>${t}</option>`).join('')}</select></div><button class="b full" data-a="addveh">Add vehicle (£${co.weekly_price}/week)</button><p class="mut">Billed per week started, from the day you add it. Remove it any time to stop the charge.</p></div>
   <div class="card"><h2>${act.length} active</h2>${act.map(v => `<div class="item"><div class="t"><b>${esc(v.reg)}</b><div class="mut">${esc(v.type)} · added ${v.added_on}</div></div><button class="b sm sec" data-a="rmveh" data-id="${v.id}">Remove</button></div>`).join('')}</div>`;
 }
 async function peopleView() {
-  const { data } = await sb.from('profiles').select('*').eq('company_id', co.id).order('full_name');
+  const data = await api('GET', '/api/people');
   return `<h1>People</h1><div class="card"><h2>Driver sign-up code</h2><div class="big" style="letter-spacing:3px">${esc(co.join_code)}</div><p class="mut">Give this to each driver. They open the app, tap "Driver? Join with a company code", and make their own login. Everyone here is free.</p></div>
   <div class="card">${(data || []).map(p => `<div class="item"><div class="t"><b>${esc(p.full_name)}</b>${p.id === me.id ? ' (you)' : ''}<div class="mut">${esc(p.email)} · ${p.role}${p.active ? '' : ' · disabled'}</div></div>${p.id === me.id ? '' : `<button class="b sm sec" data-a="role" data-id="${p.id}" data-v="${p.role === 'admin' ? 'driver' : 'admin'}">Make ${p.role === 'admin' ? 'driver' : 'admin'}</button><button class="b sm sec" data-a="active" data-id="${p.id}" data-v="${!p.active}">${p.active ? 'Disable' : 'Enable'}</button>`}</div>`).join('')}</div>`;
 }
@@ -239,21 +251,21 @@ async function checklistView() {
   <div class="card"><h2>Emails & billing</h2><label>Send alerts to</label><input id="ae" type="email" value="${esc(co.alert_email)}"><label>Invoices to</label><input id="be" type="email" value="${esc(co.billing_email)}"><label>Minimum total check time (seconds)</label><input id="mt" type="number" value="${co.min_total_secs}"><button class="b full" data-a="savesettings">Save settings</button></div>`;
 }
 async function billingView() {
-  const [{ data: u }, { data: inv }] = await Promise.all([sb.rpc('usage_now'), sb.from('invoices').select('*').order('period', { ascending: false })]);
+  const { usage: u, invoices: inv } = await api('GET', '/api/billing');
   const sub = u.subtotal, vat = u.vat_on ? Math.round(sub * u.vat_rate * 100) / 100 : 0;
-  return `<h1>Billing</h1><div class="card"><h2>This month so far</h2><table class="tbl"><tr><th>Vehicle</th><th class="r">Weeks</th><th class="r">£</th></tr>${u.rows.map(r => `<tr><td>${esc(r.reg)}<div class="mut">${r.added}${r.removed ? ' → ' + r.removed : ''}</div></td><td class="r">${r.weeks}</td><td class="r">${(r.weeks * u.price).toFixed(2)}</td></tr>`).join('')}<tr><td>Subtotal</td><td class="r">${u.weeks}</td><td class="r">${sub.toFixed(2)}</td></tr>${u.vat_on ? `<tr><td>VAT ${u.vat_rate * 100}%</td><td></td><td class="r">${vat.toFixed(2)}</td></tr>` : ''}<tr><th>Total</th><th></th><th class="r">${(sub + vat).toFixed(2)}</th></tr></table><p class="mut">£${u.price} per vehicle per week. Any week started counts as a full week. Invoiced monthly in arrears.</p></div>
-  <div class="card"><h2>Invoices</h2>${(inv || []).map(i => `<div class="item"><div class="t"><b>${i.number}</b><div class="mut">${i.period.slice(0, 7)} · ${i.weeks} vehicle-weeks · due ${i.due_on}</div></div><div>${gbp(i.total)}</div><span class="pill ${i.status === 'paid' ? 'ok' : 'warn'}">${i.status}</span><button class="b sm sec" data-a="printinv" data-id="${i.id}">View</button></div>`).join('') || '<p class="mut">First invoice is raised on the 1st of next month.</p>'}</div>`;
+  return `<h1>Billing</h1><div class="card"><h2>This month so far</h2><table class="tbl"><tr><th>Vehicle</th><th class="r">Weeks</th><th class="r">£</th></tr>${u.rows.map(r => `<tr><td>${esc(r.reg)}<div class="mut">${String(r.added).slice(0, 10)}${r.removed ? ' → ' + String(r.removed).slice(0, 10) : ''}</div></td><td class="r">${r.weeks}</td><td class="r">${(r.weeks * u.price).toFixed(2)}</td></tr>`).join('')}<tr><td>Subtotal</td><td class="r">${u.weeks}</td><td class="r">${sub.toFixed(2)}</td></tr>${u.vat_on ? `<tr><td>VAT ${u.vat_rate * 100}%</td><td></td><td class="r">${vat.toFixed(2)}</td></tr>` : ''}<tr><th>Total</th><th></th><th class="r">${(sub + vat).toFixed(2)}</th></tr></table><p class="mut">£${u.price} per vehicle per week. Any week started counts as a full week. Invoiced monthly in arrears.</p></div>
+  <div class="card"><h2>Invoices</h2>${(inv || []).map(i => `<div class="item"><div class="t"><b>${i.number}</b><div class="mut">${i.period.slice(0, 7)} · ${i.weeks} vehicle-weeks · due ${String(i.due_on).slice(0, 10)}</div></div><div>${gbp(i.total)}</div><span class="pill ${i.status === 'paid' ? 'ok' : 'warn'}">${i.status}</span><button class="b sm sec" data-a="printinv" data-id="${i.id}">View</button></div>`).join('') || '<p class="mut">First invoice is raised on the 1st of next month.</p>'}</div>`;
 }
 async function platformView() {
-  const [{ data: cos }, { data: inv }] = await Promise.all([sb.from('companies').select('*').order('created_at'), sb.from('invoices').select('*, companies(name)').order('period', { ascending: false })]);
+  const { companies: cos, invoices: inv } = await api('GET', '/api/platform');
   return `<h1>Platform</h1><div class="card"><h2>Monthly billing</h2><p class="mut">Runs automatically on the 1st. You can run last month now (safe to repeat).</p><button class="b" data-a="runbill">Generate last month's invoices</button></div>
-  <div class="card"><h2>${(cos || []).length} customers</h2>${(cos || []).map(c => `<div class="item"><div class="t"><b>${esc(c.name)}</b><div class="mut">${esc(c.billing_email)}</div></div></div>`).join('')}</div>
-  <div class="card"><h2>Invoices</h2>${(inv || []).map(i => `<div class="item"><div class="t"><b>${i.number}</b> ${esc(i.companies && i.companies.name)}<div class="mut">${i.period.slice(0, 7)}</div></div><div>${gbp(i.total)}</div>${i.status === 'unpaid' ? `<button class="b sm" data-a="markpaid" data-id="${i.id}">Mark paid</button>` : '<span class="pill ok">paid</span>'}</div>`).join('')}</div>`;
+  <div class="card"><h2>${(cos || []).length} customers</h2>${(cos || []).map(c => `<div class="item"><div class="t"><b>${esc(c.name)}</b><div class="mut">${esc(c.billing_email)} · ${c.people} people · ${c.vehicles} vehicles</div></div></div>`).join('')}</div>
+  <div class="card"><h2>Invoices</h2>${(inv || []).map(i => `<div class="item"><div class="t"><b>${i.number}</b> ${esc(i.company)}<div class="mut">${i.period.slice(0, 7)}</div></div><div>${gbp(i.total)}</div>${i.status === 'unpaid' ? `<button class="b sm" data-a="markpaid" data-id="${i.id}">Mark paid</button>` : '<span class="pill ok">paid</span>'}</div>`).join('')}</div>`;
 }
 async function printInv(id) {
-  const { data: i } = await sb.from('invoices').select('*').eq('id', id).single();
   const w = window.open('', '_blank'); if (!w) return toast('Allow pop-ups to view the invoice');
-  w.document.write(`<title>${i.number}</title><body style="font:15px system-ui;max-width:640px;margin:30px auto"><h1>Invoice ${i.number}</h1><p><b>${esc(co.name)}</b><br>Period ${i.period.slice(0, 7)} · Issued ${i.issued_on} · Due ${i.due_on}</p><table width="100%" cellpadding="6" style="border-collapse:collapse"><tr style="border-bottom:1px solid #000"><th align=left>Vehicle</th><th>Weeks</th><th align=right>£</th></tr>${i.lines.map(l => `<tr><td>${esc(l.reg)} (${esc(l.type)})</td><td align=center>${l.weeks}</td><td align=right>${Number(l.amount).toFixed(2)}</td></tr>`).join('')}</table><p align=right>Subtotal ${gbp(i.subtotal)}<br>VAT ${gbp(i.vat)}<br><b>Total ${gbp(i.total)}</b></p><p>Status: ${i.status}</p><script>print()<\/script>`);
+  const i = await api('GET', '/api/invoices/' + id).catch(e => { w.close(); throw e; });
+  w.document.write(`<title>${i.number}</title><body style="font:15px system-ui;max-width:640px;margin:30px auto"><h1>Invoice ${i.number}</h1><p><b>${esc(co.name)}</b><br>Period ${i.period.slice(0, 7)} · Issued ${String(i.issued_on).slice(0, 10)} · Due ${String(i.due_on).slice(0, 10)}</p><table width="100%" cellpadding="6" style="border-collapse:collapse"><tr style="border-bottom:1px solid #000"><th align=left>Vehicle</th><th>Weeks</th><th align=right>£</th></tr>${i.lines.map(l => `<tr><td>${esc(l.reg)} (${esc(l.type)})</td><td align=center>${l.weeks}</td><td align=right>${Number(l.amount).toFixed(2)}</td></tr>`).join('')}</table><p align=right>Subtotal ${gbp(i.subtotal)}<br>VAT ${gbp(i.vat)}<br><b>Total ${gbp(i.total)}</b></p><p>Status: ${i.status}</p><script>print()<\/script>`);
   w.document.close();
 }
 
@@ -265,7 +277,7 @@ document.addEventListener('click', async e => {
   if (a === 'd1' || a === 'd2') return;
   if (a === 'mode') { authMode = d.v; errMsg = ''; return render(); }
   if (a === 'auth') return run(doAuth);
-  if (a === 'out') { await sb.auth.signOut(); me = co = null; ck = null; cache = {}; return render(); }
+  if (a === 'out') { setToken(''); me = co = null; ck = null; cache = {}; return render(); }
   if (a === 'tab') { view = d.v; errMsg = ''; cache.open = null; return render(); }
   if (a === 'sync') return flush();
   if (a === 'start') return run(async () => {
@@ -285,32 +297,33 @@ document.addEventListener('click', async e => {
   });
   if (a === 'submit') { ck.notes = $('#notes').value; return run(submitCheck); }
   if (a === 'open') { cache.open = cache.open === d.id ? null : d.id; return render(); }
-  if (a === 'fix') return run(async () => { const { error } = await sb.from('checks').update({ fixed: true }).eq('id', d.id); if (error) throw error; });
-  if (a === 'resolve') return run(async () => { const { error } = await sb.from('alerts').update({ resolved: true }).eq('id', d.id); if (error) throw error; });
-  if (a === 'photo') { const { data } = await sb.storage.from('check-photos').createSignedUrl(d.p, 300); if (data) window.open(data.signedUrl, '_blank'); else toast('Photo not found'); return; }
-  if (a === 'addveh') return run(async () => { const reg = $('#reg').value.trim().toUpperCase(); if (!reg) throw new Error('Enter a reg'); const { error } = await sb.from('vehicles').insert({ company_id: co.id, reg, type: $('#vt').value }); if (error) throw error; toast(reg + ' added'); });
-  if (a === 'rmveh') return run(async () => { if (!confirm('Remove this vehicle? Billing for it stops after the week already started.')) return; const { error } = await sb.from('vehicles').update({ removed_on: new Date().toISOString().slice(0, 10) }).eq('id', d.id); if (error) throw error; });
-  if (a === 'role') return run(async () => { const { error } = await sb.from('profiles').update({ role: d.v }).eq('id', d.id); if (error) throw error; });
-  if (a === 'active') return run(async () => { const { error } = await sb.from('profiles').update({ active: d.v === 'true' }).eq('id', d.id); if (error) throw error; });
+  if (a === 'fix') return run(() => api('POST', '/api/checks/' + d.id + '/fix'));
+  if (a === 'resolve') return run(() => api('POST', '/api/alerts/' + d.id + '/resolve'));
+  if (a === 'photo') { const w = window.open('', '_blank'); try { const r = await fetch('/api/photo?p=' + encodeURIComponent(d.p), { headers: { Authorization: 'Bearer ' + token } }); if (!r.ok) throw 0; const u = URL.createObjectURL(await r.blob()); if (w) w.location = u; } catch (x) { if (w) w.close(); toast('Photo not found'); } return; }
+  if (a === 'addveh') return run(async () => { const reg = $('#reg').value.trim().toUpperCase(); if (!reg) throw new Error('Enter a reg'); await api('POST', '/api/vehicles', { reg, type: $('#vt').value }); toast(reg + ' added'); });
+  if (a === 'rmveh') return run(async () => { if (!confirm('Remove this vehicle? Billing for it stops after the week already started.')) return; await api('POST', '/api/vehicles/' + d.id + '/remove'); });
+  if (a === 'role') return run(() => api('POST', '/api/people/' + d.id, { role: d.v }));
+  if (a === 'active') return run(() => api('POST', '/api/people/' + d.id, { active: d.v === 'true' }));
   if (['additem', 'delitem', 'savesettings'].includes(a)) return run(async () => {
     const cl = JSON.parse(JSON.stringify(co.checklist)); const upd = {};
     if (a === 'additem') { const v = $('#ni' + d.i).value.trim(); if (!v) return; cl[+d.i].items.push(v); upd.checklist = cl; }
     if (a === 'delitem') { cl[+d.i].items.splice(+d.j, 1); upd.checklist = cl; }
     if (a === 'savesettings') { upd.alert_email = $('#ae').value.trim(); upd.billing_email = $('#be').value.trim(); upd.min_total_secs = parseInt($('#mt').value) || 0; }
-    const { error } = await sb.from('companies').update(upd).eq('id', co.id); if (error) throw error; Object.assign(co, upd); toast('Saved');
+    const r = await api('PUT', '/api/company', upd); co = r.co; toast('Saved');
   });
   if (a === 'printinv') return printInv(d.id);
-  if (a === 'runbill') return run(async () => { const { data, error } = await sb.rpc('generate_invoices'); if (error) throw error; toast(data + ' invoice(s) created'); });
-  if (a === 'markpaid') return run(async () => { const { error } = await sb.from('invoices').update({ status: 'paid', paid_on: new Date().toISOString().slice(0, 10) }).eq('id', d.id); if (error) throw error; });
+  if (a === 'runbill') return run(async () => { const r = await api('POST', '/api/platform/run-billing', {}); toast(r.n + ' invoice(s) created'); });
+  if (a === 'markpaid') return run(() => api('POST', '/api/platform/invoices/' + d.id + '/paid'));
 });
 document.addEventListener('change', async e => {
   const el = e.target, a = el.dataset.a, d = el.dataset; if (!a) return;
   if (a === 'plate' && el.files[0]) { ck.plate = await shrink(el.files[0]); ck.plateUrl = URL.createObjectURL(ck.plate); render(); }
   if (a === 'xphoto' && el.files[0]) { const b = await shrink(el.files[0]); ck.extra.push({ blob: b, url: URL.createObjectURL(b) }); render(); }
   if (a === 'dphoto' && el.files[0]) { const b = await shrink(el.files[0]), x = ck.res[secs().id][+d.j]; x.blob = b; x.url = URL.createObjectURL(b); render(); }
+  if (a === 'filt') { cache.f = { vehicle: $('#f-vehicle').value, driver: $('#f-driver').value, verdict: $('#f-verdict').value, from: $('#f-from').value, to: $('#f-to').value }; return render(); }
   if (a === 'sev') ck.res[secs().id][+d.j].sev = el.value;
   if (a === 'd1' || a === 'd2') { ck[a] = el.checked; const b = $('#nx'); if (b) b.disabled = !(ck.d1 && ck.d2); }
-  if (a === 'stitle' || a === 'ssecs') { const cl = JSON.parse(JSON.stringify(co.checklist)); if (a === 'stitle') cl[+d.i].title = el.value; else cl[+d.i].secs = parseInt(el.value) || 0; const { error } = await sb.from('companies').update({ checklist: cl }).eq('id', co.id); if (error) toast(error.message); else { co.checklist = cl; toast('Saved'); } }
+  if (a === 'stitle' || a === 'ssecs') { const cl = JSON.parse(JSON.stringify(co.checklist)); if (a === 'stitle') cl[+d.i].title = el.value; else cl[+d.i].secs = parseInt(el.value) || 0; try { const r = await api('PUT', '/api/company', { checklist: cl }); co = r.co; toast('Saved'); } catch (x) { toast(x.message); } }
 });
 document.addEventListener('input', e => {
   const el = e.target, a = el.dataset.a;
@@ -319,25 +332,17 @@ document.addEventListener('input', e => {
 });
 
 async function doAuth() {
-  const em = $('#em').value.trim(), pw = $('#pw').value;
-  if (!em || pw.length < 6) throw new Error('Enter your email and a password of 6+ characters');
-  if (authMode === 'in') { const { error } = await sb.auth.signInWithPassword({ email: em, password: pw }); if (error) throw error; }
-  else {
-    const nm = $('#nm').value.trim(); if (!nm) throw new Error('Enter your name');
-    if (authMode === 'co' && !$('#cn').value.trim()) throw new Error('Enter your company name');
-    if (authMode === 'dr' && !$('#cc').value.trim()) throw new Error('Enter your company code');
-    const { data, error } = await sb.auth.signUp({ email: em, password: pw }); if (error) throw error;
-    if (!data.session) { const r = await sb.auth.signInWithPassword({ email: em, password: pw }); if (r.error) throw new Error('Account created. Check your email to confirm it, then sign in.'); }
-    const r = authMode === 'co' ? await sb.rpc('create_company', { p_name: $('#cn').value.trim(), p_full_name: nm }) : await sb.rpc('join_company', { p_code: $('#cc').value, p_full_name: nm });
-    if (r.error) throw r.error;
-  }
-  await loadMe(); view = me.is_platform_admin && !co ? 'platform' : 'home'; flush();
+  const email = $('#em').value.trim(), password = $('#pw').value;
+  if (!email || password.length < 8) throw new Error('Enter your email and a password of 8+ characters');
+  let r;
+  if (authMode === 'in') r = await api('POST', '/api/login', { email, password });
+  else r = await api('POST', '/api/signup', { email, password, mode: authMode, name: $('#nm').value, company: authMode === 'co' ? $('#cn').value : '', code: authMode === 'dr' ? $('#cc').value : '' });
+  setToken(r.token); await loadMe(); view = 'home'; flush();
 }
 
 const origRender = render;
 render = async function () { if (view === 'result' && cache.result) { $('#app').innerHTML = shell(resultView()); return; } return origRender(); };
 setInterval(() => { if (ck && typeof ck.step === 'number') gate(); }, 1000);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-sb.auth.onAuthStateChange(() => {});
-loadMe().then(() => { if (me && me.is_platform_admin && !co) view = 'platform'; render(); flush(); });
+loadMe().catch(() => {}).then(() => { render(); flush(); });
 })();
