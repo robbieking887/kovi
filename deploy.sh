@@ -35,6 +35,10 @@ echo "== Photo storage bucket"
 gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1 || gcloud storage buckets create "gs://$BUCKET" --location="$REGION" --uniform-bucket-level-access --public-access-prevention
 gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$RUNSA" --role=roles/storage.objectAdmin --condition=None >/dev/null
 gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$RUNSA" --role=roles/cloudsql.client --condition=None >/dev/null
+# newer Google Cloud projects do not let the default service account build from source until it is given the builder role
+gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$RUNSA" --role=roles/cloudbuild.builds.builder --condition=None >/dev/null
+gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$RUNSA" --role=roles/run.builder --condition=None >/dev/null 2>&1 || true
+sleep 20  # let the permissions settle
 
 echo "== Secrets"
 secret kovi-jwt "$(openssl rand -hex 32)"
