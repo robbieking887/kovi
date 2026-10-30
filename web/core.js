@@ -92,6 +92,7 @@ K.signOut = () => { S.form = null; K.setToken(''); S.me = S.co = null; S.ck = nu
 /* ---------- render ---------- */
 const isAdmin = K.isAdmin = () => S.me && S.me.role === 'admin';
 K.shell = function shell(body) {
+  document.body.classList.toggle('flow', S.view === 'check' || S.view === 'handover');
   const tabs = K.tabs.filter(t => (!t.admin || isAdmin()) && (!t.platform || S.me.is_platform_admin) && (!t.when || t.when()));
   const label = !S.me.email ? 'Switch driver' : 'Sign out';
   return `<header><b>KOVI</b><small>${esc(S.co ? S.co.name : '')}</small><span class="sp"></span><small>${esc(S.me.full_name || S.me.email)}</small><button class="b sec sm" data-a="out" style="color:#fff;border-color:#ffffff55">${label}</button></header>
@@ -102,7 +103,7 @@ K.foot = () => `<p class="foot"><a href="/legal/terms" target="_blank" rel="noop
 let rt = 0;
 K.render = async function render() {
   const app = $('#app'), my = ++rt;
-  if (!S.me) { app.innerHTML = K.authView(); if (S.form) for (const [k, v] of Object.entries(S.form)) { const e = document.getElementById(k); if (e) { if (e.type === 'checkbox') e.checked = v; else e.value = v; } } return; }
+  if (!S.me) { document.body.classList.remove('flow'); app.innerHTML = K.authView(); if (S.form) for (const [k, v] of Object.entries(S.form)) { const e = document.getElementById(k); if (e) { if (e.type === 'checkbox') e.checked = v; else e.value = v; } } return; }
   if (!S.co) { app.innerHTML = K.shell('<div class="card"><h2>No company yet</h2><p>Sign out and create or join a company.</p></div>'); return; }
   if (S.ck && S.view === 'check') { app.innerHTML = K.shell(K.checkView()); K.gate(); return; }
   if (S.ho && S.view === 'handover') { app.innerHTML = K.shell(K.handoverView()); K.afterRender(); return; }

@@ -1,4 +1,4 @@
-const C = 'kovi-v3';
+const C = 'kovi-v4';
 const A = ['/', '/index.html', '/core.js', '/driver.js', '/admin.js', '/main.js', '/vendor/qrcode.js', '/style.css', '/icon.svg', '/manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(A)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== C).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
