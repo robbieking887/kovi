@@ -65,12 +65,14 @@ gcloud run services update kovi --region "$REGION" --update-env-vars "^#^APP_URL
 
 echo "== Monthly invoice job (1st of each month, 02:10 London)"
 CRON="$(gcloud secrets versions access latest --secret=kovi-cron)"
-ARGS=(--location="$REGION" --schedule="10 2 1 * *" --time-zone=Europe/London --uri="$URL/api/cron/invoices" --http-method=POST --headers="x-cron-secret=$CRON")
-gcloud scheduler jobs describe kovi-invoices --location="$REGION" >/dev/null 2>&1 && gcloud scheduler jobs update http kovi-invoices "${ARGS[@]}" || gcloud scheduler jobs create http kovi-invoices "${ARGS[@]}"
+ARGS=(--location="$REGION" --schedule="10 2 1 * *" --time-zone=Europe/London --uri="$URL/api/cron/invoices" --http-method=POST)
+HDR="x-cron-secret=$CRON"
+gcloud scheduler jobs update http kovi-invoices "${ARGS[@]}" --update-headers="$HDR" >/dev/null 2>&1 || gcloud scheduler jobs create http kovi-invoices "${ARGS[@]}" --headers="$HDR"
 
 echo "== Reminder job (every 15 minutes: missed-check alerts, MOT/tax/service reminders, Monday PDF report)"
-TARGS=(--location="$REGION" --schedule="*/15 * * * *" --time-zone=Europe/London --uri="$URL/api/cron/tick" --http-method=POST --headers="x-cron-secret=$CRON")
-gcloud scheduler jobs describe kovi-tick --location="$REGION" >/dev/null 2>&1 && gcloud scheduler jobs update http kovi-tick "${TARGS[@]}" || gcloud scheduler jobs create http kovi-tick "${TARGS[@]}"
+TARGS=(--location="$REGION" --schedule="*/15 * * * *" --time-zone=Europe/London --uri="$URL/api/cron/tick" --http-method=POST)
+HDR="x-cron-secret=$CRON"
+gcloud scheduler jobs update http kovi-tick "${TARGS[@]}" --update-headers="$HDR" >/dev/null 2>&1 || gcloud scheduler jobs create http kovi-tick "${TARGS[@]}" --headers="$HDR"
 
 echo
 echo "DONE. Kovi is live at: $URL"
