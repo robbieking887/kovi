@@ -1,6 +1,7 @@
 'use strict';
 const { normSections } = require('./templates');
 const UUID = /^[0-9a-f-]{36}$/i, SEV = ['minor', 'major', 'danger'];
+const SOFT = ['no_gps', 'far'];
 const FLAG_TEXT = { no_gps: 'no GPS fix, could not confirm location', far: 'moved more than 150 m from the vehicle during the check', no_walk: 'compass shows they did not walk all the way round', too_fast: 'check finished faster than the minimum time', no_plate: 'no reg plate photo' };
 // everything except the (large) checklist snapshot, which is only sent when one check is opened
 const COLS = 'c.id,c.company_id,c.vehicle_id,c.trailer_id,c.driver_id,c.started_at,c.finished_at,c.start_lat,c.start_lng,c.start_acc,c.end_lat,c.end_lng,c.distance_m,c.heading_coverage,c.duration_secs,c.plate_photo,c.licence,c.mileage,c.results,c.defects,c.notes,c.flags,c.verdict,c.fixed,c.template_id';
@@ -39,7 +40,8 @@ module.exports = function checks(ctx) {
       section: String(d.section || '').slice(0, 60), item: String(d.item || '').slice(0, 80), severity: SEV.includes(d.severity) ? d.severity : 'minor',
       note: String(d.note || '').slice(0, 500), target: d.target === 'trailer' ? 'trailer' : 'vehicle',
       photo: typeof d.photo === 'string' && d.photo.startsWith(`${u.company_id}/${b.id}/`) && !d.photo.includes('..') ? d.photo : null })).filter(d => d.item);
-    const verdict = flags.length ? 'flagged' : defects.length ? 'defect' : 'pass';
+    const hard = flags.filter(f => !SOFT.includes(f));   // GPS trouble is recorded on the check but never flags it or alerts the office: phone GPS is too unreliable beside lorries and in yards
+    const verdict = hard.length ? 'flagged' : defects.length ? 'defect' : 'pass';
     const n = x => (Number.isFinite(+x) && x !== null && x !== '' ? +x : null);
     const ins = await q(`insert into checks(id,company_id,vehicle_id,trailer_id,driver_id,started_at,finished_at,start_lat,start_lng,start_acc,end_lat,end_lng,distance_m,heading_coverage,duration_secs,plate_photo,licence,mileage,results,defects,notes,flags,verdict,template_id,checklist)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) on conflict (id) do nothing returning id`,
@@ -47,7 +49,7 @@ module.exports = function checks(ctx) {
         `${u.company_id}/${b.id}/plate.jpg`, String(b.licence || '').slice(0, 5), n(b.mileage), JSON.stringify(b.results || {}), JSON.stringify(defects), String(b.notes || '').slice(0, 2000), flags, verdict,
         UUID.test(b.template_id || '') ? b.template_id : null, JSON.stringify(sections)]);
     if (ins.rowCount) {
-      const alerts = flags.map(f => ['verification', `${u.full_name} on ${v.reg}: ${FLAG_TEXT[f]}`]);
+      const alerts = hard.map(f => ['verification', `${u.full_name} on ${v.reg}: ${FLAG_TEXT[f]}`]);
       let fresh = 0;
       for (const d of defects) {
         const target = d.target === 'trailer' && trailer ? trailer : v;

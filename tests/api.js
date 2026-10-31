@@ -87,8 +87,9 @@ async function call(method, url, { token, body, ip, headers } = {}) {
   r = await call('GET', '/api/defects?status=all', { token: A }); ok(r.d.filter(d => d.item === 'Tyres and wheel nuts').length === 2, 'after a fix, the same fault again is a new defect');
 
   console.log('flagged checks + offline snapshot');
-  r = await call('POST', '/api/checks', { token: D2, body: mk(uid(), { defects: [], flags: ['far', 'bogus'], duration_secs: 1 }) }); ok(r.d.verdict === 'flagged', 'unverified checks are flagged');
-  r = await call('GET', '/api/alerts', { token: A }); ok(r.d.some(a => a.kind === 'verification' && /150 m/.test(a.message)), 'flag alert is raised'); ok(!r.d.some(a => /bogus/.test(a.message)), 'unknown flags are ignored');
+  r = await call('POST', '/api/checks', { token: D2, body: mk(uid(), { defects: [], flags: ['no_plate', 'bogus'], duration_secs: 1 }) }); ok(r.d.verdict === 'flagged', 'unverified checks are flagged');
+  r = await call('POST', '/api/checks', { token: D2, body: mk(uid(), { defects: [], flags: ['far', 'no_gps'], duration_secs: 600 }) }); ok(r.d.verdict === 'pass', 'GPS trouble alone never flags a check');
+  r = await call('GET', '/api/alerts', { token: A }); ok(r.d.some(a => a.kind === 'verification' && /plate/.test(a.message)), 'flag alert is raised'); ok(!r.d.some(a => /bogus/.test(a.message)), 'unknown flags are ignored'); ok(!r.d.some(a => /GPS|150 m/.test(a.message)), 'GPS trouble raises no alert');
 
   console.log('custom templates, number + photo items, per-vehicle assignment');
   r = await call('GET', '/api/presets', { token: A }); ok(r.d.length >= 6, 'presets are offered');

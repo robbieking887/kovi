@@ -14,7 +14,7 @@ K.authView = function () {
     pin: `<h1>Driver sign in</h1><label>Company code</label><input id="cc" autocapitalize="characters" autocomplete="off" value="${esc(code)}" placeholder="e.g. D65B307B"><label>Your 6 digit PIN</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••••">`,
     in: `<h1>Office sign in</h1><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password</label><input id="pw" type="password" autocomplete="current-password">`,
     co: `<h1>Set up your company</h1><label>Your name</label><input id="nm" autocomplete="name"><label>Company name</label><input id="cn"><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password (8+ characters)</label><input id="pw" type="password" autocomplete="new-password">
-      <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;color:var(--ink);margin:6px 0 12px"><input type="checkbox" id="terms" style="width:auto;margin:3px 0">I agree to the <a href="/legal/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/legal/data-processing" target="_blank" rel="noopener">Data Processing Terms</a>, and I will tell my drivers about the <a href="/legal/driver-notice" target="_blank" rel="noopener">Driver privacy notice</a>.</label>`,
+      <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;color:var(--ink);margin:6px 0 12px"><input type="checkbox" id="terms"><span>I agree to the <a href="/legal/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/legal/data-processing" target="_blank" rel="noopener">Data Processing Terms</a>, and I will tell my drivers about the <a href="/legal/driver-notice" target="_blank" rel="noopener">Driver privacy notice</a>.</span></label>`,
     dr: `<h1>Join as a driver</h1><p class="mut">Your manager can give you a PIN instead, which is quicker. Use this if they gave you a company code only.</p><label>Your name</label><input id="nm" autocomplete="name"><label>Company code</label><input id="cc" autocapitalize="characters" value="${esc(code)}"><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password (8+ characters)</label><input id="pw" type="password" autocomplete="new-password">` }[m];
   return `<header><b>KOVI</b><small>Fleet walkaround checks</small></header><main>${tabs}<div class="card">${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}${form}
   <button class="b full" data-a="auth">${m === 'co' || m === 'dr' ? 'Create account' : 'Sign in'}</button></div>
@@ -246,7 +246,8 @@ async function submitCheck() {
     start_lat: ck.pos0 && ck.pos0.latitude, start_lng: ck.pos0 && ck.pos0.longitude, start_acc: ck.pos0 && ck.pos0.accuracy, end_lat: sens.pos && sens.pos.latitude, end_lng: sens.pos && sens.pos.longitude,
     distance_m: Math.round(ck.maxDist), heading_coverage: ck.sectors.size, duration_secs: secsTaken, licence: ck.licence, mileage: parseInt(ck.mileage) || null,
     results, defects, notes: ck.notes, flags };
-  row.verdict = flags.length ? 'flagged' : defects.length ? 'defect' : 'pass';
+  const hard = flags.filter(f => f !== 'no_gps' && f !== 'far');   // GPS trouble is recorded but never flags a check
+  row.verdict = hard.length ? 'flagged' : defects.length ? 'defect' : 'pass';
   const item = { id: row.id, kind: 'check', row, photos, tok: K.token };
   let saved = true;
   try { if (!navigator.onLine) { const e = new Error('offline'); e.offline = true; throw e; } await K.sendItem(item); }
@@ -260,7 +261,7 @@ K.views.result = async function () {
   const f = { no_gps: 'No GPS fix', far: 'Moved too far from the vehicle', no_walk: 'Compass did not show a full walk round', too_fast: 'Finished faster than the minimum time', no_plate: 'No plate photo' };
   return `<div class="card" style="text-align:center"><div class="big" style="color:${row.verdict === 'pass' ? 'var(--ok)' : row.verdict === 'defect' ? 'var(--warn)' : 'var(--bad)'}">${row.verdict === 'pass' ? '✓ Check complete' : row.verdict === 'defect' ? '⚠ Check complete with defects' : '⚠ Check flagged'}</div>
   <p class="mut">${saved ? 'Saved. Your office can see it now.' : 'No signal. Saved on this phone and will upload automatically.'}</p>
-  ${row.flags.length ? `<div class="warn" style="text-align:left">The office has been told:<br>${row.flags.map(x => '• ' + f[x]).join('<br>')}</div>` : ''}
+  ${row.flags.filter(x => x !== 'no_gps' && x !== 'far').length ? `<div class="warn" style="text-align:left">The office has been told:<br>${row.flags.filter(x => x !== 'no_gps' && x !== 'far').map(x => '• ' + f[x]).join('<br>')}</div>` : ''}
   ${row.defects.length ? `<p>${row.defects.length} defect(s) reported</p>` : ''}<button class="b full" data-a="tab" data-v="home">Done</button></div>`;
 };
 
