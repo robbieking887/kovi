@@ -41,32 +41,32 @@ const sec = (id, title, secs, items, extra = {}) => Object.assign({ id, title, s
 const SAFETY = sec('saf', 'Safety kit', 5, [ck('Fire extinguisher'), ck('First aid kit'), ck('Warning triangle'), ck('Hi-vis and spare bulbs')]);
 const PRESETS = {
   hgv: { name: 'HGV tractor and trailer', desc: 'Cab, walk round, trailer and safety kit. The trailer part only appears when the driver picks a trailer.', sections: [
-    sec('cab', 'Cab and controls', 6, [ck('Windscreen, wipers and washers'), ck('Mirrors and cameras'), ck('Horn'), ck('Dashboard warning lights'), ck('Seat belt'), ck('Steering'), ck('Brakes and air pressure'), ck('Cab lights and indicators')]),
-    sec('out', 'Walk round vehicle', 12, [ck('Tyres and wheel nuts'), ck('Lights, reflectors and number plates'), ck('Body, doors and load security'), ck('Fluid leaks (oil, fuel, coolant)'), ck('Fuel and AdBlue caps'), ck('Mudguards and spray suppression'), ck('Exhaust')], { walk: true }),
-    sec('trl', 'Trailer', 8, [ck('Coupling, air lines and electrical connection'), ck('Landing legs'), ck('Trailer tyres and wheel nuts'), ck('Trailer lights and reflectors'), ck('Curtains, doors and tail lift'), ck('Load restraints')], { target: 'trailer' }),
+    sec('cab', 'Cab and controls', 0, [ck('Windscreen, wipers and washers'), ck('Mirrors and cameras'), ck('Horn'), ck('Dashboard warning lights'), ck('Seat belt'), ck('Steering'), ck('Brakes and air pressure'), ck('Cab lights and indicators')]),
+    sec('out', 'Walk round vehicle', 0, [ck('Tyres and wheel nuts'), ck('Lights, reflectors and number plates'), ck('Body, doors and load security'), ck('Fluid leaks (oil, fuel, coolant)'), ck('Fuel and AdBlue caps'), ck('Mudguards and spray suppression'), ck('Exhaust')], {}),
+    sec('trl', 'Trailer', 0, [ck('Coupling, air lines and electrical connection'), ck('Landing legs'), ck('Trailer tyres and wheel nuts'), ck('Trailer lights and reflectors'), ck('Curtains, doors and tail lift'), ck('Load restraints')], { target: 'trailer' }),
     SAFETY] },
   rigid: { name: 'Rigid lorry', desc: 'HGV without a trailer.', sections: [
-    sec('cab', 'Cab and controls', 6, [ck('Windscreen, wipers and washers'), ck('Mirrors and cameras'), ck('Horn'), ck('Dashboard warning lights'), ck('Seat belt'), ck('Steering'), ck('Brakes and air pressure'), ck('Cab lights and indicators')]),
-    sec('out', 'Walk round vehicle', 12, [ck('Tyres and wheel nuts'), ck('Lights, reflectors and number plates'), ck('Body, doors and load security'), ck('Tail lift or ramp'), ck('Fluid leaks (oil, fuel, coolant)'), ck('Fuel and AdBlue caps'), ck('Mudguards and spray suppression')], { walk: true }), SAFETY] },
+    sec('cab', 'Cab and controls', 0, [ck('Windscreen, wipers and washers'), ck('Mirrors and cameras'), ck('Horn'), ck('Dashboard warning lights'), ck('Seat belt'), ck('Steering'), ck('Brakes and air pressure'), ck('Cab lights and indicators')]),
+    sec('out', 'Walk round vehicle', 0, [ck('Tyres and wheel nuts'), ck('Lights, reflectors and number plates'), ck('Body, doors and load security'), ck('Tail lift or ramp'), ck('Fluid leaks (oil, fuel, coolant)'), ck('Fuel and AdBlue caps'), ck('Mudguards and spray suppression')], {}), SAFETY] },
   van: { name: 'Van', desc: 'Light commercial vehicle up to 3.5 tonnes.', sections: [
-    sec('cab', 'Cab', 4, [ck('Windscreen, wipers and washers'), ck('Mirrors'), ck('Horn'), ck('Dashboard warning lights'), ck('Seat belt'), ck('Brakes and steering')]),
-    sec('out', 'Walk round vehicle', 10, [ck('Tyres and wheel nuts'), ck('Lights and number plates'), ck('Body damage'), ck('Fluid leaks')], { walk: true }),
-    sec('load', 'Load area', 4, [ck('Load secure'), ck('Doors and locks'), ck('Tools and equipment secure')]),
-    sec('saf', 'Safety kit', 3, [ck('Fire extinguisher'), ck('First aid kit'), ck('Warning triangle')])] },
+    sec('cab', 'Cab', 0, [ck('Windscreen, wipers and washers'), ck('Mirrors'), ck('Horn'), ck('Dashboard warning lights'), ck('Seat belt'), ck('Brakes and steering')]),
+    sec('out', 'Walk round vehicle', 0, [ck('Tyres and wheel nuts'), ck('Lights and number plates'), ck('Body damage'), ck('Fluid leaks')], {}),
+    sec('load', 'Load area', 0, [ck('Load secure'), ck('Doors and locks'), ck('Tools and equipment secure')]),
+    sec('saf', 'Safety kit', 0, [ck('Fire extinguisher'), ck('First aid kit'), ck('Warning triangle')])] },
   car: { name: 'Car or pool vehicle', desc: 'Quick check for company cars and pool vehicles.', sections: [
-    sec('inside', 'Inside', 4, [ck('Windscreen and wipers'), ck('Warning lights'), ck('Horn'), ck('Seat belts')]),
-    sec('out', 'Walk round vehicle', 8, [ck('Tyres'), ck('Lights and indicators'), ck('Bodywork damage'), ck('Mirrors')], { walk: true })] },
+    sec('inside', 'Inside', 0, [ck('Windscreen and wipers'), ck('Warning lights'), ck('Horn'), ck('Seat belts')]),
+    sec('out', 'Walk round vehicle', 0, [ck('Tyres'), ck('Lights and indicators'), ck('Bodywork damage'), ck('Mirrors')], {})] },
   minibus: { name: 'Minibus', desc: 'Passenger vehicle including exits, belts and lift.', sections: [
-    sec('cab', 'Driver area', 5, [ck('Windscreen, wipers and washers'), ck('Mirrors'), ck('Horn'), ck('Warning lights'), ck('Brakes and steering')]),
-    sec('out', 'Walk round vehicle', 10, [ck('Tyres and wheel nuts'), ck('Lights and number plates'), ck('Bodywork damage'), ck('Fluid leaks')], { walk: true }),
-    sec('pax', 'Passenger area', 6, [ck('Seats and seat belts'), ck('Emergency exits and hammer'), ck('Wheelchair ramp or lift'), ck('Interior lights'), ck('Floor and steps clear')]),
-    sec('saf', 'Safety kit', 4, [ck('Fire extinguisher'), ck('First aid kit'), ck('Warning triangle'), ck('Fire blanket / body fluid kit')])] },
+    sec('cab', 'Driver area', 0, [ck('Windscreen, wipers and washers'), ck('Mirrors'), ck('Horn'), ck('Warning lights'), ck('Brakes and steering')]),
+    sec('out', 'Walk round vehicle', 0, [ck('Tyres and wheel nuts'), ck('Lights and number plates'), ck('Bodywork damage'), ck('Fluid leaks')], {}),
+    sec('pax', 'Passenger area', 0, [ck('Seats and seat belts'), ck('Emergency exits and hammer'), ck('Wheelchair ramp or lift'), ck('Interior lights'), ck('Floor and steps clear')]),
+    sec('saf', 'Safety kit', 0, [ck('Fire extinguisher'), ck('First aid kit'), ck('Warning triangle'), ck('Fire blanket / body fluid kit')])] },
   forklift: { name: 'Forklift / plant', desc: 'Counterbalance or telehandler. GPS check is off by default (indoors).', settings: { gps: false }, sections: [
-    sec('prep', 'Before you start', 4, [ck('Seat belt or restraint'), ck('Horn, lights and beacon'), ck('Brakes and steering'), ck('Parking brake'), { label: 'Hour meter reading', kind: 'number', unit: 'hrs', required: true }]),
-    sec('out', 'Walk round machine', 8, [ck('Forks and carriage'), ck('Mast and chains'), ck('Hydraulic hoses and leaks'), ck('Tyres and wheels'), ck('Guards and load backrest'), ck('Battery or fuel / gas')], { walk: true })] },
+    sec('prep', 'Before you start', 0, [ck('Seat belt or restraint'), ck('Horn, lights and beacon'), ck('Brakes and steering'), ck('Parking brake'), { label: 'Hour meter reading', kind: 'number', unit: 'hrs', required: true }]),
+    sec('out', 'Walk round machine', 0, [ck('Forks and carriage'), ck('Mast and chains'), ck('Hydraulic hoses and leaks'), ck('Tyres and wheels'), ck('Guards and load backrest'), ck('Battery or fuel / gas')], {})] },
   trailer: { name: 'Trailer only', desc: 'For checking a trailer on its own, away from the tractor unit.', sections: [
-    sec('trl', 'Trailer', 8, [ck('Coupling, air lines and electrical connection'), ck('Landing legs'), ck('Tyres and wheel nuts'), ck('Lights, reflectors and number plates'), ck('Curtains, doors and tail lift'), ck('Floor and body condition')], { walk: true })] },
-  blank: { name: 'Blank', desc: 'Start from nothing and build your own.', sections: [sec('s1', 'Checks', 5, [ck('First item')], { walk: true })] },
+    sec('trl', 'Trailer', 0, [ck('Coupling, air lines and electrical connection'), ck('Landing legs'), ck('Tyres and wheel nuts'), ck('Lights, reflectors and number plates'), ck('Curtains, doors and tail lift'), ck('Floor and body condition')], {})] },
+  blank: { name: 'Blank', desc: 'Start from nothing and build your own.', sections: [sec('s1', 'Checks', 0, [ck('First item')], {})] },
 };
 const presetSections = key => JSON.parse(JSON.stringify((PRESETS[key] || PRESETS.hgv).sections));
 const presetSettings = key => normSettings((PRESETS[key] || {}).settings);

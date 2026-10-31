@@ -88,7 +88,7 @@ async function call(method, url, { token, body, ip, headers } = {}) {
 
   console.log('flagged checks + offline snapshot');
   r = await call('POST', '/api/checks', { token: D2, body: mk(uid(), { defects: [], flags: ['far', 'bogus'], duration_secs: 1 }) }); ok(r.d.verdict === 'flagged', 'unverified checks are flagged');
-  r = await call('GET', '/api/alerts', { token: A }); ok(r.d.some(a => a.kind === 'verification' && /50 m/.test(a.message)), 'flag alert is raised'); ok(!r.d.some(a => /bogus/.test(a.message)), 'unknown flags are ignored');
+  r = await call('GET', '/api/alerts', { token: A }); ok(r.d.some(a => a.kind === 'verification' && /150 m/.test(a.message)), 'flag alert is raised'); ok(!r.d.some(a => /bogus/.test(a.message)), 'unknown flags are ignored');
 
   console.log('custom templates, number + photo items, per-vehicle assignment');
   r = await call('GET', '/api/presets', { token: A }); ok(r.d.length >= 6, 'presets are offered');
@@ -118,13 +118,14 @@ async function call(method, url, { token, body, ip, headers } = {}) {
   console.log('settings + missed-check alerts');
   r = await call('PUT', '/api/company', { token: A, body: { check_by: '25:99' } }); ok(r.s === 400, 'a bad time is refused');
   r = await call('PUT', '/api/company', { token: A, body: { check_by: '09:00', check_days: '1234567', weekly_report: false, handover_on: true } }); ok(r.s === 200 && r.d.co.check_by === '09:00' && r.d.co.handover_on === true, 'settings saved');
+  const TODAY = new Date().toISOString().slice(0, 10);   // the checks above were made now, so the missed-check day must be today
   const tick = (iso) => call('POST', '/api/cron/tick', { headers: { 'x-cron-secret': CRON, 'x-test-now': iso } });
   r = await call('POST', '/api/cron/tick', { headers: { 'x-cron-secret': 'wrong' } }); ok(r.s === 403, 'the scheduler endpoint needs the secret');
-  r = await tick('2026-10-29T08:00:00Z'); r = await call('GET', '/api/alerts', { token: A }); ok(!r.d.some(a => a.kind === 'missed'), 'nothing is raised before the deadline');
-  r = await tick('2026-10-29T12:00:00Z'); r = await call('GET', '/api/alerts', { token: A }); const missed = r.d.filter(a => a.kind === 'missed');
+  r = await tick(TODAY + 'T08:00:00Z'); r = await call('GET', '/api/alerts', { token: A }); ok(!r.d.some(a => a.kind === 'missed'), 'nothing is raised before the deadline');
+  r = await tick(TODAY + 'T12:00:00Z'); r = await call('GET', '/api/alerts', { token: A }); const missed = r.d.filter(a => a.kind === 'missed');
   ok(missed.length === 1 && /SP 99/.test(missed[0].message) && !/TR 001/.test(missed[0].message), 'after the deadline, unchecked vehicles are listed (trailers are not expected daily)');
   ok(!/AB12 CDE/.test(missed[0].message), 'a vehicle that was checked is not listed');
-  await tick('2026-10-29T13:00:00Z'); r = await call('GET', '/api/alerts', { token: A }); ok(r.d.filter(a => a.kind === 'missed').length === 1, 'it only alerts once per day');
+  await tick(TODAY + 'T13:00:00Z'); r = await call('GET', '/api/alerts', { token: A }); ok(r.d.filter(a => a.kind === 'missed').length === 1, 'it only alerts once per day');
   await call('PUT', '/api/company', { token: A, body: { check_by: '' } }); r = await call('GET', '/api/me', { token: A }); ok(r.d.co.check_by === '', 'the alert can be switched off');
 
   console.log('MOT / tax / service reminders');
@@ -139,7 +140,7 @@ async function call(method, url, { token, body, ip, headers } = {}) {
   await tick('2026-11-03T09:00:00Z'); r = await call('GET', '/api/alerts', { token: A }); ok(r.d.filter(a => a.kind === 'reminder').length === 2 && /MOT due in 1 day/.test(r.d.find(a => a.kind === 'reminder').message), 'the 1-day-before reminder fires');
 
   console.log('PDF report');
-  r = await call('GET', '/api/report.pdf?from=2026-10-20&to=2026-10-29', { token: A }); ok(r.s === 200 && r.d.slice(0, 4).toString() === '%PDF' && r.d.length > 2500, 'the report is a real PDF (' + r.d.length + ' bytes)');
+  r = await call('GET', '/api/report.pdf?from=' + TODAY + '&to=' + TODAY + '', { token: A }); ok(r.s === 200 && r.d.slice(0, 4).toString() === '%PDF' && r.d.length > 2500, 'the report is a real PDF (' + r.d.length + ' bytes)');
   require('fs').writeFileSync('/tmp/kovi-report.pdf', r.d);
   r = await call('GET', '/api/report.pdf?from=2026-01-01&to=2026-12-31', { token: A }); ok(r.s === 400, 'periods over 3 months are refused');
   r = await call('GET', '/api/report.pdf', { token: D2 }); ok(r.s === 403, 'drivers cannot download reports');

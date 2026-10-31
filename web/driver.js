@@ -2,7 +2,7 @@
 (() => {
 'use strict';
 const K = window.K, S = K.s, $ = K.$, esc = K.esc, api = K.api;
-const MAX_DIST = 50;
+const MAX_DIST = 150;   // metres. Phone GPS drifts a lot beside big vehicles and in yards, so this is deliberately generous
 
 K.tabs.push({ id: 'home', label: 'Check' }, { id: 'hist', label: 'My checks' });
 
@@ -82,7 +82,13 @@ async function startSensors() {
     onSensor();
   };
   sens.h = h; window.addEventListener('deviceorientationabsolute', h, true); window.addEventListener('deviceorientation', h, true);
-  if (navigator.geolocation) sens.watch = navigator.geolocation.watchPosition(p => { sens.pos = p.coords; onSensor(); }, () => {}, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+  if (navigator.geolocation) {
+    // ask for a precise fix first; if the phone cannot give one (indoors, cold start, cab roof), fall back to a rough one rather than none
+    const ok = p => { sens.pos = p.coords; onSensor(); };
+    const rough = () => { if (sens.watch != null) navigator.geolocation.clearWatch(sens.watch); sens.watch = navigator.geolocation.watchPosition(ok, () => {}, { enableHighAccuracy: false, maximumAge: 30000, timeout: 30000 }); };
+    sens.watch = navigator.geolocation.watchPosition(ok, e => { if (e.code !== 1 && !sens.pos) rough(); }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 });
+    setTimeout(() => { if (sens.on && !sens.pos) rough(); }, 8000);
+  }
 }
 K.stopSensors = function () {
   if (sens.watch != null) navigator.geolocation.clearWatch(sens.watch); sens.watch = null;
@@ -94,7 +100,7 @@ const needGps = () => S.ck && S.ck.tpl.settings.gps !== false;
 function onSensor() {
   const ck = S.ck; if (!ck) return;
   if (sens.pos) {
-    if (!ck.pos0 && sens.pos.accuracy < 80) ck.pos0 = { latitude: sens.pos.latitude, longitude: sens.pos.longitude, accuracy: sens.pos.accuracy };
+    if (!ck.pos0 && sens.pos.accuracy < 200) ck.pos0 = { latitude: sens.pos.latitude, longitude: sens.pos.longitude, accuracy: sens.pos.accuracy };
     if (ck.pos0) ck.maxDist = Math.max(ck.maxDist, dist(ck.pos0, sens.pos));
   }
   const sec = curSection();

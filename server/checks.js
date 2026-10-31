@@ -1,7 +1,7 @@
 'use strict';
 const { normSections } = require('./templates');
 const UUID = /^[0-9a-f-]{36}$/i, SEV = ['minor', 'major', 'danger'];
-const FLAG_TEXT = { no_gps: 'no GPS fix, could not confirm location', far: 'moved more than 50 m from the vehicle during the check', no_walk: 'compass shows they did not walk all the way round', too_fast: 'check finished faster than the minimum time', no_plate: 'no reg plate photo' };
+const FLAG_TEXT = { no_gps: 'no GPS fix, could not confirm location', far: 'moved more than 150 m from the vehicle during the check', no_walk: 'compass shows they did not walk all the way round', too_fast: 'check finished faster than the minimum time', no_plate: 'no reg plate photo' };
 // everything except the (large) checklist snapshot, which is only sent when one check is opened
 const COLS = 'c.id,c.company_id,c.vehicle_id,c.trailer_id,c.driver_id,c.started_at,c.finished_at,c.start_lat,c.start_lng,c.start_acc,c.end_lat,c.end_lng,c.distance_m,c.heading_coverage,c.duration_secs,c.plate_photo,c.licence,c.mileage,c.results,c.defects,c.notes,c.flags,c.verdict,c.fixed,c.template_id';
 const JOIN = 'from checks c join vehicles v on v.id=c.vehicle_id left join vehicles t on t.id=c.trailer_id join users u on u.id=c.driver_id';

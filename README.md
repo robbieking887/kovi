@@ -7,7 +7,7 @@ Vehicle walkaround checks for fleets. Drivers check a vehicle on their phone, th
 
 ## How it works
 - **Drivers** sign in with name and PIN, pick or scan a vehicle, and work through the checklist: plate photo, licence/CPC, mileage, pass/defect per item, photos for defects, declarations, submit.
-- **Proof the check was done:** the phone must stay within 50 m of the vehicle (GPS), sweep all four sides (compass), and spend the minimum time on each locked page. Anything that fails is flagged and the office is emailed.
+- **Proof the check was done:** the phone's GPS must stay within 150 m of the vehicle. Per checklist you can also require a compass walk-round and a minimum time per page (both off by default). Anything that fails is flagged and the office is emailed.
 - **Offline:** checks save on the phone and send when signal returns.
 - **Office** sees the fleet board, alerts, drivers, can edit the checklist and page lock times, and marks defects as fixed.
 
@@ -53,7 +53,7 @@ Alerts always show in the app. For email, make a free Resend account and re-run 
 ## Rules built in
 - **Pricing:** £1 per vehicle per week, any week started counts, 7-day blocks from the day added, VAT 20%. Invoices are created automatically on the 1st (Cloud Scheduler); the Platform tab can run it on demand (safe to repeat).
 - **Drivers** see only their own last 7 days. **Admins** see all time (History tab, filter by vehicle, driver, date, result). An admin can also do checks. Nothing is ever deleted.
-- **Checks:** per section the driver confirms the listed items in one tap, or reports a defect. Plate photo, GPS within 50 m of the vehicle, compass sweep of all 4 sides on the walk-round, minimum time per page. Failures create alerts on the server.
+- **Checks:** per section the driver confirms the listed items in one tap, or reports a defect. Plate photo, GPS within 150 m of the vehicle (forgiving, since phone GPS drifts). The compass walk-round and per-page minimum times are OFF by default so drivers can check in the rain and tick it off dry in the cab; turn them on per checklist in the builder. Failures create alerts on the server.
 - Works offline: checks (and handovers) save on the phone, with the driver's identity, and upload when signal returns.
 
 ## Features
