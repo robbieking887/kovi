@@ -1,6 +1,6 @@
 /* Extra styles for the generated marketing pages (build with: node site/build.js) */
 .nav{display:flex;gap:22px}.nav a{color:#cfd6df;text-decoration:none;font-weight:600;font-size:15px}.nav a:hover{color:#fff}
-@media(max-width:860px){.nav{display:none}.signin{display:inline!important}}
+@media(max-width:1020px){.nav{display:none}.signin{display:inline!important}}
 @media(max-width:420px){.signin{display:none!important}}
 .phead{background:linear-gradient(180deg,var(--navy),#16212d);color:#fff;padding:44px 0 40px}.narrowish{max-width:800px}
 .phead h1{font-size:clamp(30px,4.6vw,46px)}.phead .lead{color:#cfd6df;margin-bottom:18px;max-width:640px}.phead .meta{color:#9aa6b4;font-size:14px;margin:0}.fine.light{color:#9aa6b4;margin-top:10px}
@@ -21,7 +21,11 @@
 .copy{border-top:1px solid #1e2935;padding-top:16px;padding-bottom:calc(22px + env(safe-area-inset-bottom));font-size:13px}
 @media(max-width:900px){.fgrid{grid-template-columns:1fr 1fr}.relgrid{grid-template-columns:1fr}}
 @media(max-width:520px){.fgrid{grid-template-columns:1fr}}
-footer.foot .fgrid{display:grid;grid-template-columns:1.4fr repeat(4,1fr);align-items:start;justify-content:normal;flex-wrap:initial;gap:28px}
+footer.foot .fgrid{display:grid;grid-template-columns:1.4fr repeat(5,1fr);align-items:start;justify-content:normal;flex-wrap:initial;gap:28px}
 footer.foot .copy{display:block;padding-top:16px;flex-wrap:initial}
 @media(max-width:900px){footer.foot .fgrid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){footer.foot .fgrid{grid-template-columns:1fr}}
+.whygrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}.whygrid .f{text-align:left}.whygrid h3{margin:0 0 10px;font-size:20px}
+.chk{list-style:none;padding:0;margin:0}.chk li{padding:7px 0 7px 26px;position:relative;font-size:16px;color:var(--mut);border-top:1px solid var(--line)}.chk li:first-child{border-top:0}.chk li:before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:900}.chk b{color:var(--ink)}
+.ghost.dark{color:var(--ink);border-bottom-color:var(--acc);margin-left:14px}
+@media(max-width:860px){.whygrid{grid-template-columns:1fr}}

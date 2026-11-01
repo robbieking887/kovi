@@ -3,20 +3,23 @@
 const fs = require('fs'), path = require('path');
 const ORIGIN = 'https://kovifleet.co.uk', OUT = path.join(__dirname, '..', 'web', '.site'), WEB = path.join(__dirname, '..', 'web');
 const TODAY = process.env.BUILD_DATE || new Date().toISOString().slice(0, 10);
-const pages = [].concat(...['features', 'industries', 'guides', 'misc'].map(n => require('./content-' + n)));
+const pages = [].concat(...['features', 'industries', 'guides', 'misc', 'legal'].map(n => require('./content-' + n)));
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const GROUPS = { 'hgv-walkaround-check-guide': 'Daily checks', 'daily-vehicle-check-checklist-uk': 'Daily checks', 'van-daily-check-checklist': 'Daily checks', 'trailer-walkaround-check-guide': 'Daily checks', 'tyre-checks-for-lorries-and-vans': 'Daily checks', 'common-walkaround-check-mistakes': 'Daily checks', 'how-to-roll-out-daily-checks-to-drivers': 'Daily checks', 'driver-defect-reporting-guide': 'Daily checks', 'how-long-to-keep-walkaround-check-records': 'Legal requirements', 'pmi-vs-daily-walkaround-check': 'Legal requirements', 'how-to-choose-a-vehicle-check-app': 'Running a fleet' };
+for (const p of pages) if (!p.group && p.path.startsWith('/guides/')) p.group = GROUPS[p.path.split('/')[2]];
+const GORDER = ['Daily checks', 'Legal requirements', 'Running a fleet'];
 const byPath = Object.fromEntries(pages.map(p => [p.path, p]));
-const NAV = [['/features', 'Features'], ['/industries', 'Who it\'s for'], ['/guides', 'Guides'], ['/pricing', 'Pricing']];
-const SECTION_NAMES = { features: 'Features', industries: 'Industries', guides: 'Guides', compare: 'Compare' };
+const NAV = [['/why-kovi', 'Why Kovi'], ['/features', 'Features'], ['/industries', 'Who it\'s for'], ['/guides', 'Guides'], ['/pricing', 'Pricing']];
+const SECTION_NAMES = { features: 'Features', industries: 'Industries', guides: 'Guides', checklists: 'Checklists', compare: 'Compare' };
 
 const header = () => `<header class="top"><div class="wrap bar"><a class="logo" href="/">KOVI</a><span class="sp"></span>
 <nav class="nav" aria-label="Main">${NAV.map(n => `<a href="${n[0]}">${n[1]}</a>`).join('')}</nav>
 <a class="signin" href="/app">Sign in</a><a class="btn sm" href="/app?start=trial" data-cta="nav">Start free trial</a></div></header>`;
-const col = (title, prefix) => `<div><h4>${title}</h4>${pages.filter(p => p.path.startsWith(prefix) && p.path !== prefix).map(p => `<a href="${p.path}">${esc(p.nav || p.h1)}</a>`).join('')}</div>`;
+const col = (title, prefix, max = 99) => `<div><h4>${title}</h4>${pages.filter(p => p.path.startsWith(prefix) && p.path !== prefix).slice(0, max).map(p => `<a href="${p.path}">${esc(p.nav || p.h1)}</a>`).join('')}${max < 99 ? `<a href="${prefix.slice(0, -1)}"><b>All ${title.toLowerCase()} →</b></a>` : ''}</div>`;
 const footer = () => `<footer class="foot"><div class="wrap fgrid">
 <div><b class="flogo">KOVI</b><p>Daily vehicle walkaround checks for UK fleets. £1 per vehicle per week. 30 days free.</p><a class="btn sm" href="/app?start=trial" data-cta="footer">Start free trial</a></div>
-${col('Features', '/features/')}${col('Who it\'s for', '/industries/')}${col('Guides', '/guides/')}
-<div><h4>Kovi</h4><a href="/pricing">Pricing</a><a href="/how-it-works">How it works</a><a href="/faq">FAQ</a><a href="/security">Security and data</a><a href="/about">About</a><a href="/contact">Contact</a><a href="/compare/paper-vs-digital-vehicle-checks">Paper vs digital</a><a href="/app">Sign in</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/driver-notice">Driver notice</a></div>
+${col('Features', '/features/')}${col('Who it\'s for', '/industries/')}${col('Guides', '/guides/', 7)}${col('Checklists', '/checklists/')}
+<div><h4>Kovi</h4><a href="/pricing">Pricing</a><a href="/why-kovi">Why Kovi</a><a href="/how-it-works">How it works</a><a href="/faq">FAQ</a><a href="/security">Security and data</a><a href="/about">About</a><a href="/contact">Contact</a><a href="/compare/paper-vs-digital-vehicle-checks">Paper vs digital</a><a href="/app">Sign in</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/driver-notice">Driver notice</a></div>
 </div><div class="wrap copy">© ${new Date().getFullYear()} Kovi. Kovi helps you record and manage vehicle checks. You remain responsible for your own legal compliance.</div></footer>`;
 
 function crumbs(p) {
@@ -39,7 +42,10 @@ const related = p => {
   if (!list.length) return '';
   return `<section class="rel"><h2>Related</h2><div class="relgrid">${list.map(r => `<a class="relcard" href="${r.path}"><b>${esc(r.nav || r.h1)}</b><span>${esc(r.desc)}</span></a>`).join('')}</div></section>`;
 };
-const hubList = p => p.hub ? `<div class="relgrid hub">${pages.filter(x => x.path.startsWith(p.hub) && x.path !== p.hub).map(r => `<a class="relcard" href="${r.path}"><b>${esc(r.nav || r.h1)}</b><span>${esc(r.desc)}</span></a>`).join('')}</div>` : '';
+const card = r => `<a class="relcard" href="${r.path}"><b>${esc(r.nav || r.h1)}</b><span>${esc(r.desc)}</span></a>`;
+const hubList = p => { if (!p.hub) return ''; const items = pages.filter(x => x.path.startsWith(p.hub) && x.path !== p.hub);
+  if (!items.some(x => x.group)) return `<div class="relgrid hub">${items.map(card).join('')}</div>`;
+  return GORDER.map(g => { const l = items.filter(x => x.group === g); return l.length ? `<h2>${g}</h2><div class="relgrid hub">${l.map(card).join('')}</div>` : ''; }).join(''); };
 const faqHtml = p => p.faq && p.faq.length ? `<section class="faq"><h2>Questions</h2>${p.faq.map(f => `<details><summary>${esc(f[0])}</summary><p>${esc(f[1])}</p></details>`).join('')}</section>` : '';
 const cta = p => p.nocta ? '' : `<section class="final"><div class="wrap c"><h2>Try Kovi free for 30 days</h2><p class="lead">No card needed. Set up in five minutes. £1 per vehicle per week after that.</p><a class="btn big" href="/app?start=trial" data-cta="${esc(p.path.replace(/\W+/g, '-').slice(1) || 'home')}">Start your free trial</a></div></section>`;
 
