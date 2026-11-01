@@ -1,7 +1,7 @@
 # Kovi phone apps (iPhone + Android)
 
 These wrap the live Kovi web app in a native shell (Capacitor) so it can be listed on the App Store and Google Play.
-The app loads https://kovi-...run.app (change `server.url` to your own domain once you have one) and adds " KoviApp" to the
+The app loads https://kovifleet.co.uk and adds " KoviApp" to the
 user agent. In that mode Kovi hides company sign-up and card billing, so the stores' payment rules don't apply to the app:
 companies sign up and pay on the website; drivers and managers just sign in.
 

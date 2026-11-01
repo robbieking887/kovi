@@ -93,3 +93,6 @@ The earlier Supabase version is kept in `legacy/` for reference.
 4. **Stores:** see `mobile/README.md` and `store/LISTING.md`.
 Rules: 30 day trial, no card; 7 days grace; then locked (sign in + billing only, nothing deleted) until a card is added. Existing customers are never locked. Platform owner can extend trials or switch billing off per company.
 Tests: `node tests/api.js`, `node tests/launch.js` (fake Stripe on :8098), `node tests/e2e.js`.
+
+## Domain
+kovifleet.co.uk is served by a Cloudflare Worker (`kovi-edge`) that forwards to Cloud Run (Cloud Run can't map domains in europe-west2). The worker adds an `x-kovi-edge` secret so the server trusts the visitor IP it passes on (env `EDGE_SECRET`). Stripe webhook URL: https://kovifleet.co.uk/api/stripe/webhook

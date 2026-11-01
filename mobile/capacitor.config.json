@@ -1,1 +1,1 @@
-{"appId":"uk.co.kovi.fleet","appName":"Kovi","webDir":"www","server":{"url":"https://kovi-4154647370.europe-west2.run.app","cleartext":false,"allowNavigation":["kovi-4154647370.europe-west2.run.app"]},"appendUserAgent":" KoviApp","ios":{"contentInset":"always"},"android":{"allowMixedContent":false}}
+{"appId":"uk.co.kovi.fleet","appName":"Kovi","webDir":"www","server":{"url":"https://kovifleet.co.uk","cleartext":false,"allowNavigation":["kovifleet.co.uk"]},"appendUserAgent":" KoviApp","ios":{"contentInset":"always"},"android":{"allowMixedContent":false}}
