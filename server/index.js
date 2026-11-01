@@ -41,6 +41,12 @@ async function deletePhotos(prefix) {
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+// Behind the Cloudflare worker on our domain: it passes the visitor's real address with a secret only it knows
+const EDGE_SECRET = process.env.EDGE_SECRET || '';
+app.use((req, res, next) => {
+  if (EDGE_SECRET && req.get('x-kovi-edge') === EDGE_SECRET && req.get('x-kovi-client-ip')) Object.defineProperty(req, 'ip', { value: req.get('x-kovi-client-ip').slice(0, 60), configurable: true });
+  next();
+});
 app.use(sec.headers);
 app.use(sec.globalLimit(600));
 app.use(express.json({ limit: '1mb', verify: (req, res, buf) => { if (req.originalUrl.startsWith('/api/stripe/webhook')) req.rawBody = buf; } }));
