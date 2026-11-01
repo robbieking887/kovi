@@ -104,7 +104,12 @@ K.shell = function shell(body) {
   <main>${K.banner()}${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}${body}${K.foot()}</main>`;
 };
 K.banner = () => {
-  const a = S.co && S.co.access; if (!a || !isAdmin() || S.view === 'billing') return '';
+  const nv = S.me && S.me.email && S.me.email_verified === false ? `<div class="warn"><b>Confirm your email.</b> We sent a link to ${esc(S.me.email)}. <button class="b sec sm" data-a="resendverify" style="margin-left:8px">Send again</button></div>` : '';
+  const a = S.co && S.co.access; if (!a || !isAdmin() || S.view === 'billing') return nv;
+  return nv + K.banner2(a);
+};
+K.actions.resendverify = () => K.run(async () => { await api('POST', '/api/auth/verify/resend'); K.toast('Sent. Check your inbox and junk folder.'); });
+K.banner2 = a => {
   const go = '<button class="b sm" data-a="tab" data-v="billing" style="margin-left:8px">Add card</button>';
   if (a.state === 'trial') return `<div class="${a.days_left <= 7 ? 'warn' : 'ok'}"><b>Free trial:</b> ${a.days_left} day${a.days_left === 1 ? '' : 's'} left.${K.native ? '' : go}</div>`;
   if (a.state === 'grace') return `<div class="warn"><b>Your free trial has ended.</b> Kovi pauses in ${a.days_left} day${a.days_left === 1 ? '' : 's'} unless a card is added.${K.native ? '' : go}</div>`;

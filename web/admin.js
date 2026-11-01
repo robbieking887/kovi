@@ -293,6 +293,7 @@ K.views.billing = async function () {
     : `<p>${u.weeks} vehicle-weeks × ${gbp(u.price)} = <b>${gbp(u.subtotal)}</b>${u.vat_on ? ` + VAT ${gbp(vat)} = <b>${gbp(u.subtotal + vat)}</b>` : ''}</p>`}
   <p class="mut">Each vehicle is charged for every 7-day block that starts in the month, from the day the trial ends or the day you add it, whichever is later. Remove a vehicle and charging stops.</p>
   ${u.rows.length ? `<table class="tbl"><tr><th>Vehicle</th><th class="r">Weeks</th><th class="r">Amount</th></tr>${u.rows.map(r => `<tr><td>${esc(r.reg)} <span class="mut">${esc(r.type)}</span></td><td class="r">${r.weeks}</td><td class="r">${gbp(r.weeks * u.price)}</td></tr>`).join('')}</table>` : ''}</div>
+  <div class="card"><h2>Enquiries (${leads.length})</h2>${leads.length ? '<button class="b sec sm" data-a="leadscsv" style="margin-bottom:8px">Download CSV</button>' : ''}${leads.map(l => `<div class="item" style="flex-wrap:wrap"><div class="t"><b>${esc(l.name)}</b>${l.company ? ' · ' + esc(l.company) : ''}<div class="mut">${K.d(l.created_at)} · <a href="mailto:${esc(l.email)}">${esc(l.email)}</a>${l.phone ? ' · ' + esc(l.phone) : ''}${l.fleet_size ? ' · ' + esc(l.fleet_size) + ' vehicles' : ''}${l.source ? '<br>from ' + esc(l.source) : ''}${l.message ? '<br>' + esc(l.message) : ''}</div></div></div>`).join('') || '<p class="mut">None yet.</p>'}</div>
   <div class="card"><h2>Invoices</h2>${b.invoices.map(i => `<div class="item"><div class="t"><b>${esc(i.number)}</b><div class="mut">${new Date(i.period).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}${i.pay_error && i.status !== 'paid' ? ' · ' + esc(i.pay_error) : ''}</div></div><b>${gbp(i.total)}</b>${K.pill(i.status === 'paid' ? 'fixed' : i.status === 'unpaid' ? 'minor' : 'void')}</div>`).join('') || '<p class="mut">Your first invoice is created at the start of the month after your trial ends.</p>'}</div>`;
 };
 K.actions.addcard = () => K.run(async () => { const r = await api('POST', '/api/billing/card'); location.href = r.url; });
@@ -300,12 +301,18 @@ K.actions.rmcard = () => { if (!confirm('Remove your card? Kovi will pause after
 
 /* ================= platform owner ================= */
 K.views.platform = async function () {
-  const p = await api('GET', '/api/platform'), mrr = p.companies.reduce((a, c) => a + c.vehicles * c.weekly_price * 52 / 12, 0);
+  const p = await api('GET', '/api/platform'), leads = await api('GET', '/api/platform/leads').catch(() => []), mrr = p.companies.reduce((a, c) => a + c.vehicles * c.weekly_price * 52 / 12, 0);
   return `<h1>Platform</h1><div class="card"><div class="grid"><div><div class="big">${p.companies.length}</div><div class="mut">companies</div></div><div><div class="big">${gbp(mrr)}</div><div class="mut">approx. per month before VAT</div></div></div><button class="b sec full" style="margin-top:10px" data-a="runbilling">Create last month's invoices</button></div>
   <div class="card"><h2>Companies</h2>${p.companies.map(c => `<div class="item" style="flex-wrap:wrap"><div class="t"><b>${esc(c.name)}</b><div class="mut">${c.vehicles} vehicles · ${c.people} people · terms ${esc(c.terms_version || 'not accepted')}<br>${c.billing_exempt ? 'billing off' : c.has_card ? 'card on file' : c.trial_ends_at ? 'trial ends ' + K.d(c.trial_ends_at) : 'no trial (existing)'}</div></div>
     <input id="pr-${c.id}" type="number" step="0.01" min="0" max="100" value="${c.weekly_price}" style="width:90px;margin:0"><button class="b sec sm" data-a="setprice" data-id="${c.id}">Set £/week</button><button class="b sec sm" data-a="xtrial" data-id="${c.id}">+14 days trial</button><button class="b sec sm" data-a="xexempt" data-id="${c.id}" data-on="${c.billing_exempt ? '' : '1'}">${c.billing_exempt ? 'Bill them' : 'Don\'t bill'}</button></div>`).join('')}</div>
   <div class="card"><h2>Invoices</h2>${p.invoices.map(i => `<div class="item"><div class="t"><b>${esc(i.number)}</b> ${esc(i.company)}<div class="mut">${gbp(i.total)} · ${i.status}</div></div>${i.status === 'unpaid' ? `<button class="b sm" data-a="markpaid" data-id="${i.id}">Mark paid</button>` : K.pill('fixed')}</div>`).join('') || '<p class="mut">None.</p>'}</div>`;
 };
+K.actions.leadscsv = () => K.run(async () => {
+  const rows = await api('GET', '/api/platform/leads'), cols = ['created_at', 'name', 'email', 'phone', 'company', 'fleet_size', 'source', 'message'];
+  const cell = v => { v = String(v == null ? '' : v); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+  const csv = [cols.join(',')].concat(rows.map(r => cols.map(c => cell(r[c])).join(','))).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'kovi-enquiries.csv'; a.click();
+});
 K.actions.runbilling = () => K.run(async () => { const r = await api('POST', '/api/platform/run-billing', {}); K.toast(r.n + ' invoice(s) created'); });
 K.actions.setprice = (el, d) => K.run(async () => { await api('POST', `/api/platform/companies/${d.id}/price`, { weekly_price: +val('#pr-' + d.id) }); K.toast('Price updated'); });
 K.actions.xtrial = (el, d) => K.run(async () => { await api('POST', `/api/platform/companies/${d.id}/trial`, { days: 14 }); K.toast('Trial extended by 14 days'); });

@@ -245,3 +245,13 @@ create table if not exists leads (
   created_at timestamptz not null default now(),
   name text not null, email text not null, phone text, company text, fleet_size text, message text, source text, ip_hash text
 );
+
+-- email confirmation: existing users count as confirmed; new signups confirm by link
+do $$ begin
+  if not exists (select 1 from information_schema.columns where table_name='users' and column_name='email_verified_at') then
+    alter table users add column email_verified_at timestamptz;
+    update users set email_verified_at = now();
+  end if;
+end $$;
+alter table users add column if not exists verify_hash text;
+alter table users add column if not exists verify_expires timestamptz;

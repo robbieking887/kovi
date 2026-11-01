@@ -94,7 +94,7 @@ async function auth(req, res, next) {
 }
 const admin = (req, res, next) => req.user.role === 'admin' && req.user.company_id ? next() : res.status(403).json({ error: 'Admins only' });
 const platform = (req, res, next) => isPlatform(req.user) ? next() : res.status(403).json({ error: 'Not allowed' });
-const pub = u => ({ id: u.id, email: u.email, full_name: u.full_name, role: u.role, company_id: u.company_id, is_platform_admin: isPlatform(u) });
+const pub = u => ({ id: u.id, email: u.email, full_name: u.full_name, role: u.role, company_id: u.company_id, is_platform_admin: isPlatform(u), email_verified: !u.email || !!u.email_verified_at });
 const getCompany = async id => (await q('select * from companies where id=$1', [id])).rows[0] || null;
 // a short record of who did something sensitive, shown to the company in Settings
 async function audit(req, action, detail = {}, user) {
@@ -145,6 +145,7 @@ app.post('/api/signup', wrap(async (req, res) => {
     catch (e) { if (e.code === '23505') throw bad('That email already has a login. Sign in instead.', 409); throw e; }
     await client.query('commit');
     audit(req, 'signup', { mode: mode === 'co' ? 'company' : 'driver' }, u);
+    if (ctx.sendVerify) ctx.sendVerify(u).catch(e => console.error('verify mail', e.message));
     if (mode === 'co' && ctx.billing) ctx.billing.welcome(u, company.trim());
     res.json({ token: sign(u) });
   } catch (e) { await client.query('rollback').catch(() => {}); throw e; } finally { client.release(); }

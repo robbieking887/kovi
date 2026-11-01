@@ -7,6 +7,26 @@ module.exports = function account(ctx) {
   const { app, q, wrap, bad, auth, admin, pool, mail, audit, sign, throttle, tooManyFails, noteFail, sec } = ctx;
   const APP = ctx.config.APP_URL;
 
+  /* ---------- confirm email (single use link, 3 days, only the hash is stored) ---------- */
+  async function sendVerify(u) {
+    if (!u.email || u.email_verified_at) return;
+    const token = crypto.randomBytes(32).toString('hex');
+    await q("update users set verify_hash=$1, verify_expires=now() + interval '3 days' where id=$2", [sec.sha256(token), u.id]);
+    await mail.sendMail({ to: u.email, subject: 'Confirm your email for Kovi', text: `Hi ${u.full_name || ''},\n\nPlease confirm your email address so we know it is really you:\n${APP}/app#verify=${token}\n\nThe link works for 3 days. If you did not sign up to Kovi you can ignore this email.\nKovi` });
+  }
+  ctx.sendVerify = sendVerify;
+  app.post('/api/auth/verify', wrap(async (req, res) => {
+    throttle('v' + req.ip, ctx.config.TEST_MODE ? 500 : 30);
+    const t = String((req.body || {}).token || ''); if (!/^[0-9a-f]{64}$/.test(t)) throw bad('This confirmation link is not valid.', 400);
+    const u = (await q('update users set email_verified_at=now(), verify_hash=null, verify_expires=null where verify_hash=$1 and verify_expires > now() returning id, company_id', [sec.sha256(t)])).rows[0];
+    if (!u) throw bad('This confirmation link has expired or was already used. Sign in and ask for a new one.', 400);
+    audit(req, 'email_verified', {}, u); res.json({ ok: true });
+  }));
+  app.post('/api/auth/verify/resend', auth, wrap(async (req, res) => {
+    throttle('vr' + req.user.id, ctx.config.TEST_MODE ? 500 : 5);
+    await sendVerify(req.user); res.json({ ok: true });
+  }));
+
   /* ---------- forgot / reset password (single use, 1 hour, only the hash is stored) ---------- */
   app.post('/api/auth/forgot', wrap(async (req, res) => {
     const email = String((req.body || {}).email || '').trim().toLowerCase();

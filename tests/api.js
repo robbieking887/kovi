@@ -191,5 +191,15 @@ async function call(method, url, { token, body, ip, headers } = {}) {
   r = await call('GET', '/api/platform/leads', { token: A }); ok(r.s === 403, 'customers cannot read enquiries');
   r = await call('GET', '/api/platform/leads', { token: P }); ok(r.s === 200 && r.d.some(l => l.email === `lead${stamp}@t.co`), 'platform owner can read enquiries');
 
+  console.log('email confirmation');
+  r = await call('GET', '/api/me', { token: A }); ok(r.d.me.email_verified === false, 'new company admin starts unconfirmed');
+  const vt = require('crypto').randomBytes(32).toString('hex'), vh = require('crypto').createHash('sha256').update(vt).digest('hex');
+  sql(`update users set verify_hash='${vh}', verify_expires=now()+interval '1 day' where email='o${stamp}@t.co'`);
+  r = await call('POST', '/api/auth/verify', { body: { token: 'nope' } }); ok(r.s === 400, 'bad confirmation link refused');
+  r = await call('POST', '/api/auth/verify', { body: { token: vt } }); ok(r.s === 200, 'confirmation link works');
+  r = await call('POST', '/api/auth/verify', { body: { token: vt } }); ok(r.s === 400, 'confirmation link is single use');
+  r = await call('GET', '/api/me', { token: A }); ok(r.d.me.email_verified === true, 'account now confirmed');
+  r = await call('POST', '/api/auth/verify/resend', { token: A }); ok(r.s === 200, 'resend is harmless once confirmed');
+
   console.log(`\n${pass} passed, ${failed} failed`); process.exit(failed ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(1); });
