@@ -153,7 +153,7 @@ K.checkView = function () {
       ${open.length ? '<p class="mut">You do not need to report these again unless they have got worse.</p>' : ''}</div>`;
     const hasTrl = ck.tpl.sections.some(s => s.target === 'trailer');
     h += `<div class="card"><h2>Before you start</h2>
-    <label>1. Photo of the reg plate (required)</label><input type="file" accept="image/*" capture="environment" id="plate" data-a="plate">${ck.plateUrl ? `<img class="photo" src="${ck.plateUrl}">` : ''}
+    <label>1. Reg plate: type it in, or take a photo (either is fine)</label><input id="plateTxt" data-a="platetxt" autocapitalize="characters" autocomplete="off" placeholder="e.g. AB12 CDE" value="${esc(ck.plateText || '')}"><input type="file" accept="image/*" id="plate" data-a="plate" style="margin-top:8px">${ck.plateUrl ? `<img class="photo" src="${ck.plateUrl}">` : ''}
     <label>2. Licence and CPC valid?</label><div class="seg">${['Yes', 'No', 'N/A'].map(x => `<button data-a="lic" data-v="${x}" class="${ck.licence === x ? 'on ' + (x === 'No' ? 'd' : 'p') : ''}">${x}</button>`).join('')}</div>
     <label style="display:block;margin-top:10px">3. Mileage</label><input id="mil" inputmode="numeric" value="${esc(ck.mileage)}">
     ${hasTrl && ck.trailers.length ? `<label>4. Trailer</label><select id="trl" data-a="trailer"><option value="">No trailer</option>${ck.trailers.map(t => `<option value="${t.id}" ${ck.trailer && ck.trailer.id === t.id ? 'selected' : ''}>${esc(t.reg)}</option>`).join('')}</select>` : ''}
@@ -173,7 +173,7 @@ K.checkView = function () {
     ${rep ? '' : `<ul style="margin:0 0 12px;padding-left:20px">${ci.map(j => `<li>${esc(s.items[j].label)}</li>`).join('')}</ul>`}
     ${rep ? ci.map(j => { const it = s.items[j], st = r[j]; return `<div class="item" style="flex-wrap:wrap"><div class="t">${esc(it.label)}</div><div class="seg" style="width:150px"><button data-a="pd" data-j="${j}" data-v="p" class="${!st || st.ok ? 'on p' : ''}">OK</button><button data-a="pd" data-j="${j}" data-v="d" class="${st && !st.ok ? 'on d' : ''}">Defect</button></div>
       ${st && !st.ok ? `<div style="width:100%"><select data-a="sev" data-j="${j}"><option ${st.sev === 'minor' ? 'selected' : ''} value="minor">Minor (monitor)</option><option ${st.sev === 'major' ? 'selected' : ''} value="major">Major (fix soon)</option><option ${st.sev === 'danger' ? 'selected' : ''} value="danger">Dangerous (do not drive)</option></select><input placeholder="What is wrong? (required)" value="${esc(st.note)}" data-a="dnote" data-j="${j}">
-        ${it.failPhoto !== 'none' ? `<label>Photo of the defect${it.failPhoto === 'required' ? ' (required)' : ''}</label><input type="file" accept="image/*" capture="environment" data-a="dphoto" data-j="${j}">${st.url ? `<img class="photo" src="${st.url}">` : ''}` : ''}</div>` : ''}</div>`; }).join('') : ''}
+        ${it.failPhoto !== 'none' ? `<label>${it.failPhoto === 'required' ? 'Photo of the fault (required)' : 'Add a photo of the fault (optional)'}</label><input type="file" accept="image/*" data-a="dphoto" data-j="${j}">${st.url ? `<img class="photo" src="${st.url}">` : ''}` : ''}</div>` : ''}</div>`; }).join('') : ''}
     ${ck.conf[s.id] ? `<div class="pill ${nd ? 'warn' : 'ok'}" style="margin:6px 0">${nd ? nd + ' defect(s) noted' : '✓ Confirmed all OK'}</div>` : `<button class="b grn full" data-a="allok">${rep ? '✓ Confirm — everything else is OK' : '✓ Yes, all checked and OK'}</button>`}
     ${rep ? '' : `<button class="b sec full" data-a="rep" style="margin-top:8px">Something is not right</button>`}` : ''}</div>
     <div class="warn" id="lock"></div><button class="b full" data-a="next" id="nx" disabled>${ck.step === secs.length ? 'Finish' : 'Next'}</button>`;
@@ -196,7 +196,7 @@ function whyLocked(s) {
 }
 K.gate = function () {
   const ck = S.ck; if (!ck) return; const nx = $('#nx'); if (!nx) return;
-  if (ck.step === 0) { nx.disabled = !(ck.plate && ck.licence); return; }
+  if (ck.step === 0) { nx.disabled = !((ck.plate || (ck.plateText || '').trim().length >= 2) && ck.licence); return; }
   if (ck.step === 'fin') return;
   const s = curSection(); if (!s) return; const why = whyLocked(s);
   const L = $('#lock'); if (L) { L.style.display = why ? '' : 'none'; L.textContent = why; }
@@ -224,6 +224,7 @@ K.actions.next = () => K.run(async () => {
   ck.tm = null; onSensor();
 });
 K.actions.submit = () => { S.ck.notes = $('#notes').value; return K.run(submitCheck); };
+K.inputs.platetxt = el => { S.ck.plateText = el.value.toUpperCase(); K.gate(); };
 K.changes.plate = async (el) => { if (el.files[0]) { S.ck.plate = await K.shrink(el.files[0]); S.ck.plateUrl = URL.createObjectURL(S.ck.plate); K.render(); } };
 K.changes.trailer = el => { S.ck.mileage = $('#mil').value; S.ck.trailer = el.value ? S.ck.trailers.find(x => x.id === el.value) : null; };
 K.changes.xphoto = async el => { if (el.files[0]) { const b = await K.shrink(el.files[0]); S.ck.extra.push({ blob: b, url: URL.createObjectURL(b) }); K.render(); } };
@@ -236,13 +237,13 @@ K.inputs.num = (el, d) => { S.ck.res[curSection().id][+d.j] = { v: el.value.trim
 
 async function submitCheck() {
   const ck = S.ck, ended = Date.now(), secsTaken = Math.round((ended - ck.t0) / 1000), flags = [], secs = ck.sections;
-  if (!ck.plate) flags.push('no_plate');
+  if (!ck.plate && !(ck.plateText || '').trim()) flags.push('no_plate');
   if (needGps()) { if (!ck.pos0) flags.push('no_gps'); else if (ck.maxDist > MAX_DIST) flags.push('far'); }
   if (secs.some(s => s.walk) && (sens.heading == null || ck.sectors.size < 4)) flags.push('no_walk');
   const minTotal = Math.max(S.co.min_total_secs || 0, secs.reduce((a, s) => a + (s.secs || 0), 0));
   if (secsTaken < minTotal) flags.push('too_fast');
   const defects = [], results = {}, photos = [], base = `${S.co.id}/${ck.id}/`;
-  photos.push({ name: 'plate.jpg', blob: ck.plate });
+  if (ck.plate) photos.push({ name: 'plate.jpg', blob: ck.plate });
   ck.extra.forEach((x, i) => photos.push({ name: 'extra' + i + '.jpg', blob: x.blob }));
   secs.forEach(s => { results[s.id] = s.items.map((it, j) => {
     const x = ck.res[s.id][j];
@@ -252,7 +253,7 @@ async function submitCheck() {
     return 1; }); });
   const row = { id: ck.id, vehicle_id: ck.vehicle.id, trailer_id: ck.trailer ? ck.trailer.id : null, template_id: ck.tpl.id, checklist: secs, started_at: new Date(ck.t0).toISOString(), finished_at: new Date(ended).toISOString(),
     start_lat: ck.pos0 && ck.pos0.latitude, start_lng: ck.pos0 && ck.pos0.longitude, start_acc: ck.pos0 && ck.pos0.accuracy, end_lat: sens.pos && sens.pos.latitude, end_lng: sens.pos && sens.pos.longitude,
-    distance_m: Math.round(ck.maxDist), heading_coverage: ck.sectors.size, duration_secs: secsTaken, licence: ck.licence, mileage: parseInt(ck.mileage) || null,
+    distance_m: Math.round(ck.maxDist), heading_coverage: ck.sectors.size, duration_secs: secsTaken, licence: ck.licence, plate_text: (ck.plateText || '').trim().slice(0, 20), has_plate: !!ck.plate, mileage: parseInt(ck.mileage) || null,
     results, defects, notes: ck.notes, flags };
   const hard = flags.filter(f => f !== 'no_gps' && f !== 'far');   // GPS trouble is recorded but never flags a check
   row.verdict = hard.length ? 'flagged' : defects.length ? 'defect' : 'pass';

@@ -235,3 +235,5 @@ begin
   end loop;
   return n;
 end $$;
+
+alter table checks add column if not exists plate_text text;   -- reg typed in by the driver instead of (or as well as) a photo
