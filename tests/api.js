@@ -170,5 +170,17 @@ async function call(method, url, { token, body, ip, headers } = {}) {
   r = await call('GET', '/api/onboarding', { token: A }); ok(r.s === 200 && r.d.vehicles === 3 && r.d.dismissed === false, 'onboarding progress counts what the company has done');
   r = await call('POST', '/api/onboarding/dismiss', { token: A }); r = await call('GET', '/api/onboarding', { token: A }); ok(r.d.dismissed === true, 'checklist can be hidden');
 
+  console.log('marketing site + SEO');
+  const txt = x => Buffer.from(x).toString();
+  r = await call('GET', '/sitemap.xml'); const urls = [...txt(r.d).matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1].replace('https://kovifleet.co.uk', '') || '/');
+  ok(r.s === 200 && urls.length >= 35, 'sitemap lists ' + urls.length + ' pages');
+  let bad_ = []; for (const u of urls) { const x = await call('GET', u); const h = txt(x.d); if (x.s !== 200 || !h.includes('<link rel="canonical" href="https://kovifleet.co.uk' + (u === '/' ? '/' : u) + '"') || !/<title>[^<]{10,}/.test(h) || !/<meta name="description" content="[^"]{50,}/.test(h) || (h.match(/<h1/g) || []).length !== 1) bad_.push(u + ' ' + x.s); }
+  ok(!bad_.length, 'every page has 200, canonical, title, description and exactly one h1 ' + bad_.join(','));
+  r = await call('GET', '/guides/'); ok(r.s === 200 || r.s === 301, 'trailing slash handled');
+  r = await call('GET', '/this-page-does-not-exist'); ok(r.s === 404 && txt(r.d).includes('noindex'), 'unknown pages are real 404s');
+  r = await call('GET', '/robots.txt'); ok(txt(r.d).includes('Sitemap: https://kovifleet.co.uk/sitemap.xml') && txt(r.d).includes('Disallow: /api/'), 'robots.txt points to the sitemap and blocks the app and api');
+  r = await call('GET', '/guides/hgv-walkaround-check-guide'); ok(txt(r.d).includes('"@type":"Article"') && txt(r.d).includes('"@type":"FAQPage"') && txt(r.d).includes('BreadcrumbList'), 'guides carry Article, FAQ and breadcrumb structured data');
+  r = await call('GET', '/app'); ok(txt(r.d).includes('core.js'), '/app still serves the app');
+
   console.log(`\n${pass} passed, ${failed} failed`); process.exit(failed ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(1); });

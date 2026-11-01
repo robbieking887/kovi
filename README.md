@@ -99,3 +99,6 @@ kovifleet.co.uk is served by a Cloudflare Worker (`kovi-edge`) that forwards to 
 
 ## Sales page and onboarding
 `/` is the sales page (`web/welcome.html`, `landing.css`, `landing.js`): hero, 3-step demo with example screenshots, features, pricing, FAQ, and "Start your 30-day free trial" buttons that go to `/app?start=trial` (opens the company sign-up form). The app itself lives at `/app` (QR links `/v/<id>` still work). After sign-up the office sees a "Get started" checklist (vehicles, drivers, first check, card) and gets three onboarding emails (days 1, 3, 6). Button clicks are logged as `landing_cta` lines in the server log. The demo screenshots in `web/img/` are staged example data.
+
+## Marketing site and SEO
+`site/` generates ~36 public pages (features, industries, guides, pricing, FAQ, compare, about, security) into `web/.site/`, plus `web/sitemap.xml`, `robots.txt` and `llms.txt`. Edit the copy in `site/content-*.js`, then run `node site/build.js` and commit the output. Each page gets its own title, description, canonical URL, Open Graph tags and JSON-LD (Article, FAQPage, BreadcrumbList, SoftwareApplication). Unknown URLs return a real 404. After a deploy: add kovifleet.co.uk to Google Search Console and submit `/sitemap.xml`.

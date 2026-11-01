@@ -1,0 +1,27 @@
+/* Extra styles for the generated marketing pages (build with: node site/build.js) */
+.nav{display:flex;gap:22px}.nav a{color:#cfd6df;text-decoration:none;font-weight:600;font-size:15px}.nav a:hover{color:#fff}
+@media(max-width:860px){.nav{display:none}.signin{display:inline!important}}
+@media(max-width:420px){.signin{display:none!important}}
+.phead{background:linear-gradient(180deg,var(--navy),#16212d);color:#fff;padding:44px 0 40px}.narrowish{max-width:800px}
+.phead h1{font-size:clamp(30px,4.6vw,46px)}.phead .lead{color:#cfd6df;margin-bottom:18px;max-width:640px}.phead .meta{color:#9aa6b4;font-size:14px;margin:0}.fine.light{color:#9aa6b4;margin-top:10px}
+.crumbs{font-size:14px;color:var(--mut);padding-top:16px;padding-bottom:0}.crumbs a{color:var(--mut)}.crumbs span{color:var(--ink)}
+.prose{padding:22px 20px 60px;font-size:18px;line-height:1.7}.prose h2{margin:36px 0 10px;font-size:26px}.prose h3{margin:24px 0 6px}.prose p{margin:0 0 16px}
+.prose ul,.prose ol{padding-left:22px;margin:0 0 18px}.prose li{margin:6px 0}.prose a{color:#9a6a00;font-weight:600}
+@media(prefers-color-scheme:dark){.prose a{color:var(--acc2)}}
+.relgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:18px 0}.relgrid.hub{margin-top:26px}
+.relcard{display:block;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;text-decoration:none!important;color:var(--ink)!important;font-weight:400!important;transition:border-color .2s,transform .1s}.relcard:hover{border-color:var(--acc);transform:translateY(-1px)}
+.relcard b{display:block;font-size:18px;margin-bottom:4px}.relcard span{display:block;color:var(--mut);font-size:15px;line-height:1.5}
+.rel h2{font-size:22px}
+.faq{margin-top:34px}.faq h2{margin-top:0}
+.tbl{width:100%;border-collapse:collapse;margin:18px 0;font-size:16px}.tbl th,.tbl td{border:1px solid var(--line);padding:10px 12px;text-align:left}.tbl th{background:var(--alt)}
+.pricebox{background:var(--card);border:2px solid var(--acc);border-radius:22px;padding:26px 22px;text-align:center;margin:10px 0 26px}.pricebox .ticks{display:inline-flex;margin:16px 0 0}
+.shotfig{margin:34px auto;text-align:center}.shotfig img{width:min(280px,80vw);height:auto;border-radius:28px;border:8px solid #000;box-shadow:0 20px 50px rgba(0,0,0,.25)}.shotfig figcaption{color:var(--mut);font-size:13px;margin-top:8px}
+.foot{background:var(--navy);color:#9aa6b4;font-size:15px;margin-top:0}.fgrid{display:grid;grid-template-columns:1.4fr repeat(4,1fr);gap:28px;padding-top:44px;padding-bottom:26px}
+.foot h4{color:#fff;margin:0 0 10px;font-size:15px}.foot a{display:block;color:#9aa6b4;text-decoration:none;padding:4px 0}.foot a:hover{color:#fff}.foot .btn{display:inline-flex;color:#14181f;margin-top:8px}.flogo{color:var(--acc);letter-spacing:3px;font-size:20px}.foot p{margin:8px 0}
+.copy{border-top:1px solid #1e2935;padding-top:16px;padding-bottom:calc(22px + env(safe-area-inset-bottom));font-size:13px}
+@media(max-width:900px){.fgrid{grid-template-columns:1fr 1fr}.relgrid{grid-template-columns:1fr}}
+@media(max-width:520px){.fgrid{grid-template-columns:1fr}}
+footer.foot .fgrid{display:grid;grid-template-columns:1.4fr repeat(4,1fr);align-items:start;justify-content:normal;flex-wrap:initial;gap:28px}
+footer.foot .copy{display:block;padding-top:16px;flex-wrap:initial}
+@media(max-width:900px){footer.foot .fgrid{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){footer.foot .fgrid{grid-template-columns:1fr}}
