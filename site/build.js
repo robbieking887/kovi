@@ -3,7 +3,7 @@
 const fs = require('fs'), path = require('path');
 const ORIGIN = 'https://kovifleet.co.uk', OUT = path.join(__dirname, '..', 'web', '.site'), WEB = path.join(__dirname, '..', 'web');
 const TODAY = process.env.BUILD_DATE || new Date().toISOString().slice(0, 10);
-const pages = [].concat(...['features', 'industries', 'guides', 'misc', 'legal', 'safety'].map(n => require('./content-' + n)));
+const pages = [].concat(...['features', 'industries', 'guides', 'misc', 'legal', 'safety', 'more'].map(n => require('./content-' + n)));
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const GROUPS = { 'hgv-walkaround-check-guide': 'Daily checks', 'daily-vehicle-check-checklist-uk': 'Daily checks', 'van-daily-check-checklist': 'Daily checks', 'trailer-walkaround-check-guide': 'Daily checks', 'tyre-checks-for-lorries-and-vans': 'Daily checks', 'common-walkaround-check-mistakes': 'Daily checks', 'how-to-roll-out-daily-checks-to-drivers': 'Daily checks', 'driver-defect-reporting-guide': 'Daily checks', 'how-long-to-keep-walkaround-check-records': 'Legal requirements', 'pmi-vs-daily-walkaround-check': 'Legal requirements', 'how-to-choose-a-vehicle-check-app': 'Running a fleet' };
 for (const p of pages) if (!p.group && p.path.startsWith('/guides/')) p.group = GROUPS[p.path.split('/')[2]];
