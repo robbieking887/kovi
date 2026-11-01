@@ -18,6 +18,7 @@ const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localSt
 K.lsGet = lsGet; K.lsSet = lsSet;
 
 /* ---------- API ---------- */
+K.native = /KoviApp/.test(navigator.userAgent);   // running inside the iPhone / Android app wrapper
 K.token = lsGet('kovi_t') || '';
 K.setToken = t => { K.token = t || ''; lsSet('kovi_t', t || null); };
 K.api = async function api(method, url, body, raw, tok) {
@@ -26,6 +27,7 @@ K.api = async function api(method, url, body, raw, tok) {
     r = await fetch(url, { method, headers: Object.assign({ Authorization: 'Bearer ' + (tok ?? K.token) }, raw ? { 'Content-Type': 'image/jpeg' } : body ? { 'Content-Type': 'application/json' } : {}), body: raw ? raw : body ? JSON.stringify(body) : undefined });
   } catch (e) { const er = new Error('No signal'); er.offline = true; throw er; }
   let j = null; try { j = await r.json(); } catch (e) {}
+  if (r.status === 402 && S.co && S.co.access) S.co.access = { ...S.co.access, state: 'locked' };   // trial over, no card
   if (!r.ok) { const e = new Error((j && j.error) || 'Something went wrong (' + r.status + ')'); e.status = r.status; throw e; }
   return j;
 };
@@ -64,7 +66,7 @@ K.flush = async function flush(quiet) {
       try { await sendItem(it); await K.qdel(it.id); n++; }
       catch (e) {
         if (e.offline || !e.status || e.status >= 500) break;                 // no signal or server trouble: try again later
-        if (e.status === 401) { stuck++; continue; }                          // that person's login has expired or been switched off
+        if (e.status === 401 || e.status === 402) { stuck++; continue; }                          // that person's login has expired or been switched off
         await K.qdel(it.id); rejected++;                                      // the server says it is not valid, so retrying cannot help
       }
     }
@@ -87,17 +89,26 @@ K.loadMe = async function () {
 };
 K.run = async function run(fn) { if (S.busy) return; S.busy = true; S.err = ''; try { await fn(); } catch (e) { S.err = e.offline ? 'No signal. Try again when you are back online.' : (e.message || String(e)); } S.busy = false; K.render(); };
 K.go = (view, keep) => { S.view = view; S.err = ''; if (!keep) S.cache.open = null; K.render(); };
+K.actions.retry = () => K.run(async () => { await K.loadMe(); });
 K.signOut = () => { S.form = null; K.setToken(''); S.me = S.co = null; S.ck = null; S.ho = null; S.cache = {}; S.view = 'home'; S.authMode = lsGet('kovi_code') ? 'pin' : 'in'; if (K.stopSensors) K.stopSensors(); K.render(); };
 
 /* ---------- render ---------- */
 const isAdmin = K.isAdmin = () => S.me && S.me.role === 'admin';
 K.shell = function shell(body) {
   document.body.classList.toggle('flow', S.view === 'check' || S.view === 'handover');
-  const tabs = K.tabs.filter(t => (!t.admin || isAdmin()) && (!t.platform || S.me.is_platform_admin) && (!t.when || t.when()));
+  const locked = S.co && S.co.access && S.co.access.state === 'locked';
+  const tabs = K.tabs.filter(t => (!t.admin || isAdmin()) && (!t.platform || S.me.is_platform_admin) && (!t.when || t.when()) && (!locked || t.id === 'billing' || t.id === 'settings'));
   const label = !S.me.email ? 'Switch driver' : 'Sign out';
   return `<header><b>KOVI</b><small>${esc(S.co ? S.co.name : '')}</small><span class="sp"></span><small>${esc(S.me.full_name || S.me.email)}</small><button class="b sec sm" data-a="out" style="color:#fff;border-color:#ffffff55">${label}</button></header>
   <nav>${tabs.map(t => `<button data-a="tab" data-v="${t.id}" class="${S.view === t.id ? 'on' : ''}">${t.label}${t.id === 'alerts' && S.cache.openAlerts ? ' (' + S.cache.openAlerts + ')' : ''}${t.id === 'defects' && S.cache.openDefects ? ' (' + S.cache.openDefects + ')' : ''}</button>`).join('')}</nav>
-  <main>${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}${body}${K.foot()}</main>`;
+  <main>${K.banner()}${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}${body}${K.foot()}</main>`;
+};
+K.banner = () => {
+  const a = S.co && S.co.access; if (!a || !isAdmin() || S.view === 'billing') return '';
+  const go = '<button class="b sm" data-a="tab" data-v="billing" style="margin-left:8px">Add card</button>';
+  if (a.state === 'trial') return `<div class="${a.days_left <= 7 ? 'warn' : 'ok'}"><b>Free trial:</b> ${a.days_left} day${a.days_left === 1 ? '' : 's'} left.${K.native ? '' : go}</div>`;
+  if (a.state === 'grace') return `<div class="warn"><b>Your free trial has ended.</b> Kovi pauses in ${a.days_left} day${a.days_left === 1 ? '' : 's'} unless a card is added.${K.native ? '' : go}</div>`;
+  return '';
 };
 K.foot = () => `<p class="foot"><a href="/legal/terms" target="_blank" rel="noopener">Terms</a> · <a href="/legal/privacy" target="_blank" rel="noopener">Privacy</a> · <a href="/legal/driver-notice" target="_blank" rel="noopener">Driver notice</a></p>`;
 let rt = 0;
@@ -105,6 +116,10 @@ K.render = async function render() {
   const app = $('#app'), my = ++rt;
   if (!S.me) { document.body.classList.remove('flow'); app.innerHTML = K.authView(); if (S.form) for (const [k, v] of Object.entries(S.form)) { const e = document.getElementById(k); if (e) { if (e.type === 'checkbox') e.checked = v; else e.value = v; } } return; }
   if (!S.co) { app.innerHTML = K.shell('<div class="card"><h2>No company yet</h2><p>Sign out and create or join a company.</p></div>'); return; }
+  if (S.co.access && S.co.access.state === 'locked') {
+    if (!isAdmin()) { app.innerHTML = K.shell('<div class="card"><h2>Kovi is paused</h2><p>Your company\'s free trial has ended. Ask your manager to add a card in Billing, then try again.</p><button class="b full" data-a="retry">Try again</button></div>'); return; }
+    if (S.view !== 'billing' && S.view !== 'settings') S.view = 'billing';
+  }
   if (S.ck && S.view === 'check') { app.innerHTML = K.shell(K.checkView()); K.gate(); return; }
   if (S.ho && S.view === 'handover') { app.innerHTML = K.shell(K.handoverView()); K.afterRender(); return; }
   let body = '';

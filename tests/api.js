@@ -2,6 +2,7 @@
 //   node tests/api.js http://localhost:8099
 const BASE = process.argv[2] || 'http://localhost:8099', CRON = process.env.CRON_SECRET || 'cronsecret';
 const stamp = Date.now(); let pass = 0, failed = 0;
+const sql = q => require('child_process').execFileSync('psql', ['-h', '/tmp', '-p', '5433', '-U', 'postgres', '-d', 'kovi', '-tAc', q]).toString().trim();
 const ok = (c, m) => { if (c) { pass++; console.log('  ok  ', m); } else { failed++; console.log('  FAIL', m); } };
 const uid = () => crypto.randomUUID();
 async function call(method, url, { token, body, ip, headers } = {}) {
@@ -11,9 +12,9 @@ async function call(method, url, { token, body, ip, headers } = {}) {
 }
 (async () => {
   console.log('signup + templates'); 
-  let r = await call('POST', '/api/signup', { body: { email: `o${stamp}@t.co`, password: 'password123', name: 'Boss', mode: 'co', company: 'API Haulage ' + stamp } });
+  let r = await call('POST', '/api/signup', { body: { email: `o${stamp}@t.co`, password: 'correct-horse-9', name: 'Boss', mode: 'co', company: 'API Haulage ' + stamp } });
   ok(r.s === 400, 'company signup without accepting terms is refused');
-  r = await call('POST', '/api/signup', { body: { email: `o${stamp}@t.co`, password: 'password123', name: 'Boss', mode: 'co', company: 'API Haulage ' + stamp, accept_terms: true } });
+  r = await call('POST', '/api/signup', { body: { email: `o${stamp}@t.co`, password: 'correct-horse-9', name: 'Boss', mode: 'co', company: 'API Haulage ' + stamp, accept_terms: true } });
   ok(r.s === 200 && r.d.token, 'company signup with terms accepted'); const A = r.d.token;
   r = await call('GET', '/api/me', { token: A }); const co = r.d.co; ok(co.join_code && co.alert_email, 'admin sees full company settings');
   r = await call('GET', '/api/templates', { token: A }); ok(r.d.length === 1 && r.d[0].is_default && r.d[0].sections.length === 4, 'new company has a default template'); const T0 = r.d[0];
@@ -68,7 +69,7 @@ async function call(method, url, { token, body, ip, headers } = {}) {
   ok((await call('GET', '/api/alerts', { token: A })).d.length === before, 'a repeat report does not raise another alert');
   r = await call('GET', '/api/vehicles/' + V['AB12 CDE'].id + '/defects', { token: D2 }); ok(r.d.length === 1 && r.d[0].item === 'Tyres and wheel nuts', 'the next driver sees the open defect on that vehicle');
   r = await call('GET', '/api/defects', { token: D2 }); ok(r.s === 403, 'drivers cannot open the defect list');
-  const other = (await call('POST', '/api/signup', { body: { email: `x${stamp}@t.co`, password: 'password123', name: 'Other', mode: 'co', company: 'Other ' + stamp, accept_terms: true } })).d.token;
+  const other = (await call('POST', '/api/signup', { body: { email: `x${stamp}@t.co`, password: 'correct-horse-9', name: 'Other', mode: 'co', company: 'Other ' + stamp, accept_terms: true } })).d.token;
   r = await call('GET', '/api/vehicles/' + V['AB12 CDE'].id + '/defects', { token: other }); ok(r.d.length === 0, 'another company cannot see this vehicle defects');
   r = await call('POST', '/api/defects/' + dTyre.id + '/fix', { token: other, body: {} }); ok(r.s === 404, 'another company cannot fix this defect');
 
@@ -147,8 +148,10 @@ async function call(method, url, { token, body, ip, headers } = {}) {
   r = await call('GET', '/api/report.pdf', { token: D2 }); ok(r.s === 403, 'drivers cannot download reports');
 
   console.log('billing + price + platform');
-  r = await call('GET', '/api/billing', { token: A }); ok(r.d.usage.rows.length === 3 && r.d.usage.price === 1, 'billing counts trailers as vehicles at the price');
-  r = await call('POST', '/api/signup', { body: { email: 'owner@kovi.test', password: 'password123', name: 'Owner', mode: 'co', company: 'Platform Co', accept_terms: true } }); if (r.s !== 200) r = await call('POST', '/api/login', { body: { email: 'owner@kovi.test', password: 'password123' } }); const P = r.d.token;
+  r = await call('GET', '/api/billing', { token: A }); ok(r.d.access.state === 'trial' && r.d.access.days_left === 30 && r.d.usage.rows.length === 0, 'a new company is on a 30 day free trial and nothing is charged during it');
+  sql(`update companies set trial_ends_at = now() - interval '3 days' where name = 'API Haulage ${stamp}'`); await call('GET', '/api/me', { token: A });
+  r = await call('GET', '/api/billing', { token: A }); ok(r.d.usage.rows.length === 3 && r.d.usage.price === 1, 'billing counts trailers as vehicles at the price once the trial is over');
+  r = await call('POST', '/api/signup', { body: { email: 'owner@kovi.test', password: 'correct-horse-9', name: 'Owner', mode: 'co', company: 'Platform Co', accept_terms: true } }); if (r.s !== 200) r = await call('POST', '/api/login', { body: { email: 'owner@kovi.test', password: 'correct-horse-9' } }); const P = r.d.token;
   r = await call('GET', '/api/platform', { token: P }); const mine = r.d.companies.find(c => c.name === 'API Haulage ' + stamp); ok(!!mine && mine.terms_version, 'platform owner sees customers and which terms they accepted');
   r = await call('POST', '/api/platform/companies/' + mine.id + '/price', { token: P, body: { weekly_price: 1.5 } }); ok(r.s === 200, 'platform owner can set a customer price');
   r = await call('POST', '/api/platform/companies/' + mine.id + '/price', { token: A, body: { weekly_price: 0 } }); ok(r.s === 403, 'customers cannot');

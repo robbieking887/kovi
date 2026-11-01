@@ -24,7 +24,7 @@ const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) fai
   console.log('Office');
   const A = await mk(), a = A.p; await a.goto(BASE);
   await a.click('[data-a=mode][data-v=co]');
-  await a.fill('#nm', 'Robbie'); await a.fill('#cn', 'E2E Haulage ' + stamp); await a.fill('#em', `boss${stamp}@t.co`); await a.fill('#pw', 'password123');
+  await a.fill('#nm', 'Robbie'); await a.fill('#cn', 'E2E Haulage ' + stamp); await a.fill('#em', `boss${stamp}@t.co`); await a.fill('#pw', 'correct-horse-9');
   await a.click('[data-a=auth]');
   await a.waitForSelector('text=Please tick the box'); ok(true, 'cannot create a company without accepting the terms');
   await a.check('#terms'); await a.click('[data-a=auth]');

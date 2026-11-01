@@ -12,15 +12,17 @@ K.authView = function () {
   const tabs = m === 'pin' || m === 'in' ? `<div class="seg" style="margin-bottom:12px"><button data-a="mode" data-v="pin" class="${m === 'pin' ? 'on p' : ''}">Driver</button><button data-a="mode" data-v="in" class="${m === 'in' ? 'on p' : ''}">Office</button></div>` : '';
   const form = {
     pin: `<h1>Driver sign in</h1><label>Company code</label><input id="cc" autocapitalize="characters" autocomplete="off" value="${esc(code)}" placeholder="e.g. D65B307B"><label>Your 6 digit PIN</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••••">`,
-    in: `<h1>Office sign in</h1><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password</label><input id="pw" type="password" autocomplete="current-password">`,
-    co: `<h1>Set up your company</h1><label>Your name</label><input id="nm" autocomplete="name"><label>Company name</label><input id="cn"><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password (8+ characters)</label><input id="pw" type="password" autocomplete="new-password">
+    in: `<h1>Office sign in</h1><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password</label><input id="pw" type="password" autocomplete="current-password"><p class="mut" style="margin:-4px 0 10px"><a href="#" data-a="mode" data-v="forgot">Forgot your password?</a></p>`,
+    forgot: `<h1>Reset your password</h1>${S.info ? `<div class="ok">${esc(S.info)}</div>` : `<p class="mut">Enter your email and we will send you a link to choose a new password.</p><label>Email</label><input id="em" type="email" autocomplete="email">`}`,
+    reset: `<h1>Choose a new password</h1><label>New password (10+ characters)</label><input id="pw" type="password" autocomplete="new-password">`,
+    co: `<h1>Start your 30 day free trial</h1><p class="mut">No card needed. After the trial it is £1 per vehicle per week.</p><label>Your name</label><input id="nm" autocomplete="name"><label>Company name</label><input id="cn"><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password (10+ characters)</label><input id="pw" type="password" autocomplete="new-password">
       <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;color:var(--ink);margin:6px 0 12px"><input type="checkbox" id="terms"><span>I agree to the <a href="/legal/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/legal/data-processing" target="_blank" rel="noopener">Data Processing Terms</a>, and I will tell my drivers about the <a href="/legal/driver-notice" target="_blank" rel="noopener">Driver privacy notice</a>.</span></label>`,
-    dr: `<h1>Join as a driver</h1><p class="mut">Your manager can give you a PIN instead, which is quicker. Use this if they gave you a company code only.</p><label>Your name</label><input id="nm" autocomplete="name"><label>Company code</label><input id="cc" autocapitalize="characters" value="${esc(code)}"><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password (8+ characters)</label><input id="pw" type="password" autocomplete="new-password">` }[m];
+    dr: `<h1>Join as a driver</h1><p class="mut">Your manager can give you a PIN instead, which is quicker. Use this if they gave you a company code only.</p><label>Your name</label><input id="nm" autocomplete="name"><label>Company code</label><input id="cc" autocapitalize="characters" value="${esc(code)}"><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password (10+ characters)</label><input id="pw" type="password" autocomplete="new-password">` }[m];
   return `<header><b>KOVI</b><small>Fleet walkaround checks</small></header><main>${tabs}<div class="card">${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}${form}
-  <button class="b full" data-a="auth">${m === 'co' || m === 'dr' ? 'Create account' : 'Sign in'}</button></div>
-  <p class="mut" style="text-align:center">${m === 'co' || m === 'dr' ? '<a href="#" data-a="mode" data-v="pin">Back to sign in</a><br>' : ''}${m !== 'co' ? '<a href="#" data-a="mode" data-v="co">Company owner? Create your company</a><br>' : ''}${m !== 'dr' ? '<a href="#" data-a="mode" data-v="dr">Driver with a company code but no PIN?</a>' : ''}</p>${K.foot()}</main>`;
+  ${m === 'forgot' && S.info ? '' : `<button class="b full" data-a="auth">${{ co: 'Start free trial', dr: 'Create account', forgot: 'Send reset link', reset: 'Save new password' }[m] || 'Sign in'}</button>`}</div>
+  <p class="mut" style="text-align:center">${m === 'co' || m === 'dr' || m === 'forgot' || m === 'reset' ? '<a href="#" data-a="mode" data-v="in">Back to sign in</a><br>' : ''}${m !== 'co' && !K.native ? '<a href="#" data-a="mode" data-v="co">Company owner? Start your free trial</a><br>' : ''}${m !== 'dr' ? '<a href="#" data-a="mode" data-v="dr">Driver with a company code but no PIN?</a>' : ''}</p>${K.foot()}</main>`;
 };
-K.actions.mode = (el, d) => { S.authMode = d.v; S.err = ''; K.render(); };
+K.actions.mode = (el, d) => { S.authMode = d.v; S.err = ''; S.info = ''; K.render(); };
 K.actions.auth = () => K.run(async () => {
   S.form = {}; document.querySelectorAll('#app input').forEach(e => { if (e.id) S.form[e.id] = e.type === 'checkbox' ? e.checked : e.value; });
   const m = S.authMode, v = id => { const e = $(id); return e ? e.value.trim() : ''; };
@@ -28,11 +30,17 @@ K.actions.auth = () => K.run(async () => {
   if (m === 'pin') {
     if (!v('#cc')) throw new Error('Enter your company code'); if (!/^\d{6}$/.test(v('#pin'))) throw new Error('Your PIN is 6 digits');
     r = await api('POST', '/api/login-pin', { code: v('#cc'), pin: v('#pin') }); K.lsSet('kovi_code', v('#cc').toUpperCase());
+  } else if (m === 'forgot') {
+    if (!v('#em')) throw new Error('Enter your email'); await api('POST', '/api/auth/forgot', { email: v('#em') });
+    S.info = 'If that email has a Kovi login, a reset link is on its way. It works for 1 hour.'; return;
+  } else if (m === 'reset') {
+    if ($('#pw').value.length < 10) throw new Error('Password must be 10 or more characters');
+    r = await api('POST', '/api/auth/reset', { token: S.resetToken, password: $('#pw').value }); S.resetToken = null; history.replaceState(null, '', '/');
   } else if (m === 'in') {
-    if (!v('#em') || $('#pw').value.length < 8) throw new Error('Enter your email and password (8+ characters)');
+    if (!v('#em') || !$('#pw').value) throw new Error('Enter your email and password');
     r = await api('POST', '/api/login', { email: v('#em'), password: $('#pw').value });
   } else {
-    if (!v('#em') || $('#pw').value.length < 8) throw new Error('Enter your email and a password of 8+ characters');
+    if (!v('#em') || $('#pw').value.length < 10) throw new Error('Enter your email and a password of 10+ characters');
     if (m === 'co' && !$('#terms').checked) throw new Error('Please tick the box to accept the terms');
     r = await api('POST', '/api/signup', { email: v('#em'), password: $('#pw').value, mode: m, name: v('#nm'), company: m === 'co' ? v('#cn') : '', code: m === 'dr' ? v('#cc') : '', accept_terms: m === 'co' ? true : undefined });
   }

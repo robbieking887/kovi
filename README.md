@@ -85,3 +85,11 @@ Roughly £25-35/month once the free credit ends (Cloud SQL smallest instance is 
 `node tests/api.js http://localhost:8099` runs 92 server checks (PIN login and rate limiting, templates, defects, trailers, reminders, missed-check alerts, PDF, permissions). `node tests/e2e.js http://localhost:8099` drives the real app in a headless browser (sign-up, builder, PIN login, QR link, full check, offline queue, handover, defect loop, PDF, QR sheet). Both need the server running with `TEST_MODE=1`. The Google Cloud deploy script itself could not be run from where it was written, so expect to fix a typo or a permission prompt on the first run.
 
 The earlier Supabase version is kept in `legacy/` for reference.
+
+## Launch checklist (v3: security, trial, billing, stores)
+1. **Stripe:** create an account, get the secret key (`sk_live_...`). Add a webhook to `<APP_URL>/api/stripe/webhook` for `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`; copy its signing secret. Set Cloud Run env `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (use Secret Manager). Test with `sk_test_` first and card 4242 4242 4242 4242.
+2. **Email:** set `RESEND_API_KEY` and `MAIL_FROM` (verified domain) for password resets, trial reminders and invoices.
+3. **Legal:** set LEGAL_NAME, LEGAL_ADDRESS, LEGAL_EMAIL, COMPANY_NUMBER, ICO_NUMBER, then have a solicitor review; register with the ICO.
+4. **Stores:** see `mobile/README.md` and `store/LISTING.md`.
+Rules: 30 day trial, no card; 7 days grace; then locked (sign in + billing only, nothing deleted) until a card is added. Existing customers are never locked. Platform owner can extend trials or switch billing off per company.
+Tests: `node tests/api.js`, `node tests/launch.js` (fake Stripe on :8098), `node tests/e2e.js`.

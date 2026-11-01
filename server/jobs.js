@@ -123,6 +123,7 @@ module.exports = function jobs(ctx) {
   ctx.runTick = async (nowDate = new Date()) => {
     const now = londonParts(nowDate), out = { at: now };
     out.missed = await missedChecks(now); out.reminders = await reminders(now); out.reports = await weeklyReports(now);
+    if (ctx.billing) await ctx.billing.tick();
     if (out.missed || out.reminders) ctx.sendAlerts().catch(e => console.error('email', e.message));
     return out;
   };

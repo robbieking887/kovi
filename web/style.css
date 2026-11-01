@@ -119,3 +119,7 @@ header b{font-size:20px}
 header{background:linear-gradient(90deg,#0b1118,#141c27)}
 .card{transition:box-shadow .15s}
 @media(min-width:900px){body.flow #app:has(nav){display:block}body.flow #app>main{margin:0 auto}}
+
+.ok{background:var(--pillokbg);color:var(--pilloktxt);border-radius:12px;padding:12px 14px;font-size:14px;margin:10px 0}
+.ok .b.sm,.warn .b.sm{min-height:36px;padding:0 14px;font-size:14px}
+.danger{border:1.5px solid var(--bad)}

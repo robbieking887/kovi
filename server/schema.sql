@@ -186,3 +186,52 @@ create table if not exists reminders_sent (
   primary key (vehicle_id, kind, due, stage)
 );
 alter table templates add column if not exists settings jsonb not null default '{}'::jsonb;   -- { gps: false } for indoor plant etc.
+
+-- ===================== v3: security, free trial, Stripe billing =====================
+alter table users add column if not exists token_version int not null default 0;      -- bump to sign a person out everywhere
+
+create table if not exists password_resets (
+  token_hash text primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  expires_at timestamptz not null, used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create table if not exists audit_log (
+  id bigserial primary key,
+  company_id uuid, user_id uuid, action text not null, detail jsonb not null default '{}'::jsonb, ip text,
+  at timestamptz not null default now()
+);
+create index if not exists audit_company_idx on audit_log (company_id, at desc);
+
+alter table companies add column if not exists trial_ends_at timestamptz;              -- null = no trial (existing customers)
+alter table companies add column if not exists billing_exempt boolean not null default false;
+alter table companies add column if not exists stripe_customer_id text;
+alter table companies add column if not exists card_brand text;
+alter table companies add column if not exists card_last4 text;
+alter table companies add column if not exists card_added_at timestamptz;
+alter table invoices add column if not exists stripe_invoice_id text;
+alter table invoices add column if not exists pay_error text;
+alter table invoices add column if not exists stripe_pushed_at timestamptz;
+
+create table if not exists trial_notices (company_id uuid not null references companies(id) on delete cascade, stage int not null, sent_on date not null default current_date, primary key (company_id, stage));
+-- tax law means invoices are kept for 6 years even after a company deletes its account
+create table if not exists invoice_archive (like invoices including defaults, company_name text, archived_at timestamptz not null default now());
+
+-- weeks are only charged once the free trial is over
+create or replace function generate_invoices(p_month date) returns int language plpgsql as $$
+declare c record; ln jsonb; w int; sub numeric; vt numeric; n int := 0; seq int; per date := date_trunc('month', p_month)::date;
+begin
+  for c in select * from companies loop
+    if exists (select 1 from invoices where company_id=c.id and period=per) then continue; end if;
+    if c.billing_exempt then continue; end if;
+    select coalesce(jsonb_agg(jsonb_build_object('reg',reg,'type',type,'weeks',wk,'amount',wk*c.weekly_price) order by reg),'[]'), coalesce(sum(wk),0)
+      into ln, w from (select reg, type, weeks_in_month(greatest(added_on, coalesce(c.trial_ends_at::date, added_on)), removed_on, per) wk from vehicles where company_id=c.id) x where wk>0;
+    if w = 0 then continue; end if;
+    sub := w * c.weekly_price; vt := case when c.vat_on then round(sub*c.vat_rate,2) else 0 end;
+    select count(*)+1 into seq from (select 1 from invoices union all select 1 from invoice_archive) s;
+    insert into invoices(company_id, number, period, lines, weeks, subtotal, vat, total)
+    values (c.id, 'KOVI-'||to_char(per,'YYMM')||'-'||lpad(seq::text,4,'0'), per, ln, w, sub, vt, sub+vt);
+    n := n + 1;
+  end loop;
+  return n;
+end $$;

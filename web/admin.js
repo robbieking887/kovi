@@ -127,8 +127,8 @@ K.actions.saveveh = (el, d) => K.run(async () => {
 K.actions.rmveh = (el, d) => { if (!confirm('Remove this vehicle? Its past checks are kept.')) return; return K.run(async () => { await api('POST', `/api/vehicles/${d.id}/remove`); S.cache.vopen = null; }); };
 function printPage(title, inner) {
   const w = window.open('', '_blank'); if (!w) { K.toast('Allow pop-ups to print'); return; }
-  w.document.write(`<!doctype html><title>${esc(title)}</title><style>body{font:16px system-ui,sans-serif;margin:16px}.q{display:inline-block;width:240px;margin:8px;padding:12px;border:2px solid #101828;border-radius:12px;text-align:center;page-break-inside:avoid}.q b{display:block;font-size:26px;letter-spacing:2px;margin-top:4px}.q small{color:#555}@media print{button{display:none}}</style><button onclick="print()">Print</button><div>${inner}</div>`);
-  w.document.close();
+  w.document.write(`<!doctype html><title>${esc(title)}</title><style>body{font:16px system-ui,sans-serif;margin:16px}.q{display:inline-block;width:240px;margin:8px;padding:12px;border:2px solid #101828;border-radius:12px;text-align:center;page-break-inside:avoid}.q b{display:block;font-size:26px;letter-spacing:2px;margin-top:4px}.q small{color:#555}@media print{button{display:none}}</style><button id="pb">Print</button><div>${inner}</div>`);
+  w.document.close(); const pb = w.document.getElementById('pb'); if (pb) pb.addEventListener('click', () => w.print());
 }
 const qrCard = v => `<div class="q">${qrSvg(v, 200)}<b>${esc(v.reg)}</b><small>Scan to start your check · KOVI</small></div>`;
 K.actions.qrone = (el, d) => printPage('QR code', qrCard(S.cache.vlist.find(v => v.id === d.id)));
@@ -231,8 +231,9 @@ K.actions.rdl = () => K.run(async () => { const f = val('#rfrom'), t = val('#rto
 
 /* ================= settings ================= */
 const DAYS = [['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['7', 'Sun']];
+const ACT = { signup: 'Account created', login_failed: 'Wrong password tried', password_changed: 'Password changed', password_reset: 'Password reset', reset_requested: 'Password reset asked for', signed_out_everywhere: 'Signed out everywhere', pin_reset: 'Driver PIN reset', person_changed: 'Person changed', settings_changed: 'Settings changed', card_added: 'Card added', card_removed: 'Card removed', data_exported: 'Data downloaded', trial_extended: 'Trial extended' };
 K.views.settings = async function () {
-  const c = S.co;
+  const c = S.co, log = await api('GET', '/api/account/security-log').catch(() => []);
   return `<h1>Settings</h1><div class="card"><h2>Email</h2><label>Send alerts and weekly reports to</label><input id="sa" type="email" value="${esc(c.alert_email || '')}"><label>Send invoices to</label><input id="sb" type="email" value="${esc(c.billing_email || '')}">
   <label style="display:flex;gap:8px;align-items:center;font-weight:400;color:var(--ink)"><input type="checkbox" id="swr" style="width:auto;margin:0" ${c.weekly_report ? 'checked' : ''}>Email me a PDF report every Monday</label></div>
   <div class="card"><h2>Who hasn't checked?</h2><p class="mut">If any vehicle that needs a daily check has not been checked by this time, you get an alert listing them.</p>
@@ -240,8 +241,18 @@ K.views.settings = async function () {
   <div class="card"><h2>Checks</h2><label>Minimum time for a whole check (seconds, 0 = none)</label><input id="smin" type="number" min="0" max="3600" value="${c.min_total_secs || 0}">
   <label style="display:flex;gap:8px;align-items:center;font-weight:400;color:var(--ink)"><input type="checkbox" id="sho" style="width:auto;margin:0" ${c.handover_on ? 'checked' : ''}>Turn on hire / handover records (before and after photos)</label></div>
   <button class="b full" data-a="savesettings">Save settings</button>
+  <div class="card" style="margin-top:12px"><h2>Your login</h2><label>Current password</label><input id="pw0" type="password" autocomplete="current-password"><label>New password (10+ characters)</label><input id="pw1" type="password" autocomplete="new-password">
+  <button class="b sec full" style="margin-top:8px" data-a="chpw">Change password</button><button class="b sec full" style="margin-top:8px" data-a="outall">Sign out on every device</button></div>
+  <div class="card"><h2>Security log</h2><p class="mut">Sign-in problems and changes to your company.</p>${log.slice(0, 15).map(l => `<div class="item"><div class="t"><b>${esc(ACT[l.action] || l.action)}</b><div class="mut">${esc(l.who || 'Someone')} · ${K.dt(l.at)}</div></div></div>`).join('') || '<p class="mut">Nothing yet.</p>'}</div>
+  <div class="card"><h2>Your data</h2><p class="mut">Download everything Kovi holds for your company (vehicles, checks, defects, people) as one file. Photos are not included.</p><button class="b sec full" data-a="exportdata">Download my data</button></div>
+  <div class="card danger"><h2>Delete my company</h2><p class="mut">This permanently deletes all your vehicles, checks, photos and people. Invoices are kept for 6 years as tax law requires. It can not be undone.</p>
+  <label>Type your company name to confirm</label><input id="dn" autocomplete="off" placeholder="${esc(c.name)}"><label>Your password</label><input id="dp" type="password" autocomplete="current-password"><button class="b red full" style="margin-top:8px" data-a="delco">Delete everything</button></div>
   <div class="card" style="margin-top:12px"><h2>Legal</h2><p class="mut"><a href="/legal/terms" target="_blank" rel="noopener">Terms of Service</a> · <a href="/legal/data-processing" target="_blank" rel="noopener">Data Processing Terms</a> · <a href="/legal/privacy" target="_blank" rel="noopener">Privacy Notice</a> · <a href="/legal/driver-notice" target="_blank" rel="noopener">Driver privacy notice</a></p><p class="mut">Please give your drivers the driver notice. It explains what the app records.</p></div>`;
 };
+K.actions.chpw = () => K.run(async () => { const r = await api('POST', '/api/account/password', { current: $('#pw0').value, password: $('#pw1').value }); K.setToken(r.token); K.toast('Password changed. Other devices are signed out.'); });
+K.actions.outall = () => { if (!confirm('Sign out of Kovi on every phone and computer?')) return; return K.run(async () => { const r = await api('POST', '/api/account/signout-all'); K.setToken(r.token); K.toast('Signed out everywhere else'); }); };
+K.actions.exportdata = () => K.run(async () => { await K.download('/api/account/export', 'kovi-export.json'); });
+K.actions.delco = () => { if (!confirm('Really delete your whole Kovi account and all its data? This can not be undone.')) return; return K.run(async () => { await api('POST', '/api/account/delete', { password: $('#dp').value, confirm_name: val('#dn') }); K.signOut(); K.toast('Your company has been deleted'); }); };
 K.actions.sday = (el, d) => { el.classList.toggle('on'); el.classList.toggle('p'); };
 K.actions.savesettings = () => K.run(async () => {
   const days = [...document.querySelectorAll('[data-a="sday"].on')].map(b => b.dataset.v).join('');
@@ -251,23 +262,38 @@ K.actions.savesettings = () => K.run(async () => {
 
 /* ================= billing ================= */
 K.views.billing = async function () {
-  const b = await api('GET', '/api/billing'), u = b.usage, vat = u.vat_on ? Math.round(u.subtotal * u.vat_rate * 100) / 100 : 0;
-  return `<h1>Billing</h1><div class="card"><h2>This month so far</h2><p>${u.weeks} vehicle-weeks × ${gbp(u.price)} = <b>${gbp(u.subtotal)}</b>${u.vat_on ? ` + VAT ${gbp(vat)} = <b>${gbp(u.subtotal + vat)}</b>` : ''}</p>
-  <p class="mut">Each vehicle is charged for every 7-day block that starts in the month, from the day you add it. Remove a vehicle and charging stops.</p>
-  <table class="tbl"><tr><th>Vehicle</th><th class="r">Weeks</th><th class="r">Amount</th></tr>${u.rows.map(r => `<tr><td>${esc(r.reg)} <span class="mut">${esc(r.type)}</span></td><td class="r">${r.weeks}</td><td class="r">${gbp(r.weeks * u.price)}</td></tr>`).join('')}</table></div>
-  <div class="card"><h2>Invoices</h2>${b.invoices.map(i => `<div class="item"><div class="t"><b>${esc(i.number)}</b><div class="mut">${new Date(i.period).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })} · due ${K.d(i.due_on)}</div></div><b>${gbp(i.total)}</b>${K.pill(i.status === 'paid' ? 'fixed' : i.status === 'unpaid' ? 'minor' : 'void')}</div>`).join('') || '<p class="mut">Your first invoice is created at the start of next month.</p>'}</div>
-  <p class="mut">Invoices are sent by email. Payment details are on each invoice.</p>`;
+  const b = await api('GET', '/api/billing'), u = b.usage, a = b.access, vat = u.vat_on ? Math.round(u.subtotal * u.vat_rate * 100) / 100 : 0;
+  const when = d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const status = {
+    trial: `<div class="ok"><b>Free trial: ${a.days_left} day${a.days_left === 1 ? '' : 's'} left</b> (ends ${when(a.trial_ends_at)}). Nothing is charged during the trial and no card is needed yet.</div>`,
+    grace: `<div class="warn"><b>Your trial has ended.</b> Kovi keeps working for ${a.days_left} more day${a.days_left === 1 ? '' : 's'}, then pauses until a card is added.</div>`,
+    locked: `<div class="err"><b>Kovi is paused.</b> The free trial has ended. Add a card below and everything switches back on straight away. Nothing has been deleted.</div>`,
+    active: `<div class="ok"><b>Subscription active.</b> We charge the card monthly in arrears.</div>`,
+    exempt: `<div class="ok">Billing is switched off for your company.</div>`, legacy: '' }[a.state] || '';
+  const card = K.native ? `<div class="card"><h2>Payment</h2><p class="mut">Your account owner manages the subscription.</p></div>`
+    : `<div class="card"><h2>Payment card</h2>${a.has_card ? `<p><b>${esc((a.card_brand || 'Card').toUpperCase())}</b> ending <b>${esc(a.card_last4)}</b></p><button class="b sec full" data-a="addcard">Change card</button><button class="b sec full" style="margin-top:8px" data-a="rmcard">Remove card</button>`
+      : b.stripe ? `<p class="mut">Add a card once. We take the invoice automatically at the start of each month, and email you a copy. Card details are held by Stripe, we never see them.</p><button class="b full" data-a="addcard">Add a card</button>`
+      : `<p class="mut">Card payments are being switched on. Until then, pay invoices by bank transfer using the details on each invoice.</p>`}</div>`;
+  return `<h1>Billing</h1>${status}${card}<div class="card"><h2>${a.state === 'trial' ? 'After your trial' : 'This month so far'}</h2>${a.state === 'trial' ? `<p>It is <b>${gbp(u.price)}</b> per vehicle per week${u.vat_on ? ' plus VAT' : ''}. Nothing is charged for any vehicle during the trial.</p>`
+    : `<p>${u.weeks} vehicle-weeks × ${gbp(u.price)} = <b>${gbp(u.subtotal)}</b>${u.vat_on ? ` + VAT ${gbp(vat)} = <b>${gbp(u.subtotal + vat)}</b>` : ''}</p>`}
+  <p class="mut">Each vehicle is charged for every 7-day block that starts in the month, from the day the trial ends or the day you add it, whichever is later. Remove a vehicle and charging stops.</p>
+  ${u.rows.length ? `<table class="tbl"><tr><th>Vehicle</th><th class="r">Weeks</th><th class="r">Amount</th></tr>${u.rows.map(r => `<tr><td>${esc(r.reg)} <span class="mut">${esc(r.type)}</span></td><td class="r">${r.weeks}</td><td class="r">${gbp(r.weeks * u.price)}</td></tr>`).join('')}</table>` : ''}</div>
+  <div class="card"><h2>Invoices</h2>${b.invoices.map(i => `<div class="item"><div class="t"><b>${esc(i.number)}</b><div class="mut">${new Date(i.period).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}${i.pay_error && i.status !== 'paid' ? ' · ' + esc(i.pay_error) : ''}</div></div><b>${gbp(i.total)}</b>${K.pill(i.status === 'paid' ? 'fixed' : i.status === 'unpaid' ? 'minor' : 'void')}</div>`).join('') || '<p class="mut">Your first invoice is created at the start of the month after your trial ends.</p>'}</div>`;
 };
+K.actions.addcard = () => K.run(async () => { const r = await api('POST', '/api/billing/card'); location.href = r.url; });
+K.actions.rmcard = () => { if (!confirm('Remove your card? Kovi will pause after the trial unless you add another.')) return; return K.run(async () => { await api('POST', '/api/billing/card/remove'); await K.loadMe(); }); };
 
 /* ================= platform owner ================= */
 K.views.platform = async function () {
   const p = await api('GET', '/api/platform'), mrr = p.companies.reduce((a, c) => a + c.vehicles * c.weekly_price * 52 / 12, 0);
   return `<h1>Platform</h1><div class="card"><div class="grid"><div><div class="big">${p.companies.length}</div><div class="mut">companies</div></div><div><div class="big">${gbp(mrr)}</div><div class="mut">approx. per month before VAT</div></div></div><button class="b sec full" style="margin-top:10px" data-a="runbilling">Create last month's invoices</button></div>
-  <div class="card"><h2>Companies</h2>${p.companies.map(c => `<div class="item" style="flex-wrap:wrap"><div class="t"><b>${esc(c.name)}</b><div class="mut">${c.vehicles} vehicles · ${c.people} people · terms ${esc(c.terms_version || 'not accepted')}</div></div>
-    <input id="pr-${c.id}" type="number" step="0.01" min="0" max="100" value="${c.weekly_price}" style="width:90px;margin:0"><button class="b sec sm" data-a="setprice" data-id="${c.id}">Set £/week</button></div>`).join('')}</div>
+  <div class="card"><h2>Companies</h2>${p.companies.map(c => `<div class="item" style="flex-wrap:wrap"><div class="t"><b>${esc(c.name)}</b><div class="mut">${c.vehicles} vehicles · ${c.people} people · terms ${esc(c.terms_version || 'not accepted')}<br>${c.billing_exempt ? 'billing off' : c.has_card ? 'card on file' : c.trial_ends_at ? 'trial ends ' + K.d(c.trial_ends_at) : 'no trial (existing)'}</div></div>
+    <input id="pr-${c.id}" type="number" step="0.01" min="0" max="100" value="${c.weekly_price}" style="width:90px;margin:0"><button class="b sec sm" data-a="setprice" data-id="${c.id}">Set £/week</button><button class="b sec sm" data-a="xtrial" data-id="${c.id}">+14 days trial</button><button class="b sec sm" data-a="xexempt" data-id="${c.id}" data-on="${c.billing_exempt ? '' : '1'}">${c.billing_exempt ? 'Bill them' : 'Don\'t bill'}</button></div>`).join('')}</div>
   <div class="card"><h2>Invoices</h2>${p.invoices.map(i => `<div class="item"><div class="t"><b>${esc(i.number)}</b> ${esc(i.company)}<div class="mut">${gbp(i.total)} · ${i.status}</div></div>${i.status === 'unpaid' ? `<button class="b sm" data-a="markpaid" data-id="${i.id}">Mark paid</button>` : K.pill('fixed')}</div>`).join('') || '<p class="mut">None.</p>'}</div>`;
 };
 K.actions.runbilling = () => K.run(async () => { const r = await api('POST', '/api/platform/run-billing', {}); K.toast(r.n + ' invoice(s) created'); });
 K.actions.setprice = (el, d) => K.run(async () => { await api('POST', `/api/platform/companies/${d.id}/price`, { weekly_price: +val('#pr-' + d.id) }); K.toast('Price updated'); });
+K.actions.xtrial = (el, d) => K.run(async () => { await api('POST', `/api/platform/companies/${d.id}/trial`, { days: 14 }); K.toast('Trial extended by 14 days'); });
+K.actions.xexempt = (el, d) => K.run(async () => { await api('POST', `/api/platform/companies/${d.id}/exempt`, { exempt: !!d.on }); });
 K.actions.markpaid = (el, d) => K.run(async () => { await api('POST', `/api/platform/invoices/${d.id}/paid`); });
 })();

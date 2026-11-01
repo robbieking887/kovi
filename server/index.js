@@ -4,6 +4,8 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const sec = require('./security');
+const { accessOf } = require('./access');
 const fs = require('fs');
 const path = require('path');
 
@@ -31,11 +33,18 @@ function readPhoto(p, res) {
   const f = path.join(LOCAL_DIR, p); if (!fs.existsSync(f)) return res.status(404).end(); fs.createReadStream(f).pipe(res);
 }
 
+async function deletePhotos(prefix) {
+  if (bucket) { await bucket.deleteFiles({ prefix: prefix + '/' }); return; }
+  fs.rmSync(path.join(LOCAL_DIR, prefix), { recursive: true, force: true });
+}
+
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
-app.use((req, res, next) => { res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin', 'Permissions-Policy': 'geolocation=(self), camera=(self)' }); next(); });
-app.use(express.json({ limit: '1mb' }));
+app.use(sec.headers);
+app.use(sec.globalLimit(600));
+app.use(express.json({ limit: '1mb', verify: (req, res, buf) => { if (req.originalUrl.startsWith('/api/stripe/webhook')) req.rawBody = buf; } }));
+app.use((err, req, res, next) => { if (err && err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Bad request' }); if (err && err.type === 'entity.too.large') return res.status(413).json({ error: 'Too large' }); next(err); });
 
 const wrap = fn => (req, res) => Promise.resolve(fn(req, res)).catch(e => { if (!e.status) console.error(e); res.status(e.status || 500).json({ error: e.status ? e.message : 'Server error' }); });
 const bad = (m, status = 400) => Object.assign(new Error(m), { status });
@@ -49,25 +58,47 @@ const tooManyFails = (key, max) => recent(fails.get(key)).length >= max;
 const noteFail = key => { const a = recent(fails.get(key)); a.push(Date.now()); fails.set(key, a); };
 setInterval(() => { for (const m of [attempts, fails]) for (const [k, v] of m) if (!recent(v).length) m.delete(k); }, 10 * 60e3).unref();
 
-const sign = u => jwt.sign({ sub: u.id }, SECRET, { expiresIn: '30d' });
+const sign = u => jwt.sign({ sub: u.id, v: u.token_version || 0 }, SECRET, { expiresIn: '30d' });   // bumping token_version signs a person out everywhere
 const isPlatform = u => !!PLATFORM_EMAIL && (u.email || '').toLowerCase() === PLATFORM_EMAIL;
+// who may do what while a company's trial has run out: they can sign in, see billing and add a card, nothing else
+const LOCK_OK = /^\/api\/(me|billing|invoices|account|auth)(\/|$)/;
+const accCache = new Map();
+async function coAccess(cid) {
+  const c = accCache.get(cid); if (c && c.exp > Date.now()) return c.a;
+  const a = accessOf(await getCompany(cid)); accCache.set(cid, { a, exp: Date.now() + (TEST_MODE ? 0 : 15e3) }); return a;
+}
+const dropAccess = cid => accCache.delete(cid);
 async function auth(req, res, next) {
+  let user;
   try {
-    const h = req.get('authorization') || '', t = h.startsWith('Bearer ') ? h.slice(7) : req.query.t;
-    const { sub } = jwt.verify(t, SECRET);
+    const h = req.get('authorization') || '';
+    const { sub, v } = jwt.verify(h.startsWith('Bearer ') ? h.slice(7) : '', SECRET);
     const { rows } = await q('select * from users where id=$1', [sub]);
-    if (!rows[0] || !rows[0].active) throw new Error('x');
-    req.user = rows[0]; next();
-  } catch (e) { res.status(401).json({ error: 'Please sign in' }); }
+    if (!rows[0] || !rows[0].active || (v || 0) !== rows[0].token_version) throw new Error('x');
+    user = rows[0];
+  } catch (e) { return res.status(401).json({ error: 'Please sign in' }); }
+  try {
+    req.user = user;
+    if (user.company_id && !LOCK_OK.test(req.originalUrl)) {
+      req.access = await coAccess(user.company_id);
+      if (req.access.state === 'locked') return res.status(402).json({ error: user.role === 'admin' ? 'Your free trial has ended. Add a card in Billing to carry on.' : "Your company's Kovi trial has ended. Ask your manager to add a card in Billing.", locked: true });
+    }
+    next();
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 }
 const admin = (req, res, next) => req.user.role === 'admin' && req.user.company_id ? next() : res.status(403).json({ error: 'Admins only' });
 const platform = (req, res, next) => isPlatform(req.user) ? next() : res.status(403).json({ error: 'Not allowed' });
 const pub = u => ({ id: u.id, email: u.email, full_name: u.full_name, role: u.role, company_id: u.company_id, is_platform_admin: isPlatform(u) });
 const getCompany = async id => (await q('select * from companies where id=$1', [id])).rows[0] || null;
+// a short record of who did something sensitive, shown to the company in Settings
+async function audit(req, action, detail = {}, user) {
+  const u = user || (req && req.user) || {};
+  try { await q('insert into audit_log(company_id, user_id, action, detail, ip) values ($1,$2,$3,$4,$5)', [u.company_id || null, u.id || null, action, JSON.stringify(detail), req && req.ip || null]); } catch (e) { console.error('audit', e.message); }
+}
 // drivers get only what the app needs; admins also get the settings
 const coView = (co, isAdmin) => {
   if (!co) return null;
-  const base = { id: co.id, name: co.name, min_total_secs: co.min_total_secs, handover_on: co.handover_on };
+  const a = accessOf(co), base = { id: co.id, name: co.name, min_total_secs: co.min_total_secs, handover_on: co.handover_on, access: isAdmin ? a : { state: a.state, days_left: a.days_left } };
   return isAdmin ? { ...base, join_code: co.join_code, alert_email: co.alert_email, billing_email: co.billing_email, weekly_price: co.weekly_price, vat_on: co.vat_on, vat_rate: co.vat_rate,
     check_by: co.check_by ? String(co.check_by).slice(0, 5) : '', check_days: co.check_days, weekly_report: co.weekly_report } : base;
 };
@@ -85,9 +116,9 @@ async function newPin(cid) {
 
 app.post('/api/signup', wrap(async (req, res) => {
   const { email, password, name, mode, company, code, accept_terms } = req.body || {};
-  throttle('s' + req.ip, 40);
+  throttle('s' + req.ip, TEST_MODE ? 500 : 12);
   if (!/^\S+@\S+\.\S+$/.test(email || '')) throw bad('Enter a valid email');
-  if (!password || password.length < 8) throw bad('Password must be 8+ characters');
+  const pwBad = sec.passwordProblem(password, email); if (pwBad) throw bad(pwBad);
   if (!name || !name.trim()) throw bad('Enter your name');
   if (mode === 'co' && accept_terms !== true) throw bad('Please tick the box to accept the Terms and Data Processing Terms');
   const client = await pool.connect();
@@ -96,25 +127,29 @@ app.post('/api/signup', wrap(async (req, res) => {
     let cid, role;
     if (mode === 'co') {
       if (!company || !company.trim()) throw bad('Enter your company name');
-      cid = (await client.query('insert into companies(name, alert_email, billing_email, terms_accepted_at, terms_version) values ($1,$2,$2,now(),$3) returning id', [company.trim(), email.trim(), TERMS_VERSION])).rows[0].id; role = 'admin';
+      cid = (await client.query('insert into companies(name, alert_email, billing_email, terms_accepted_at, terms_version, trial_ends_at) values ($1,$2,$2,now(),$3, now() + interval \'30 days\') returning id', [company.trim(), email.trim(), TERMS_VERSION])).rows[0].id; role = 'admin';
       await ctx.tpl.ensureDefault(cid, client);
     } else {
       const c = (await client.query('select id from companies where join_code=$1', [String(code || '').trim().toUpperCase()])).rows[0];
       if (!c) throw bad('Company code not found'); cid = c.id; role = 'driver';
     }
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 12);
     let u;
     try { u = (await client.query('insert into users(email,password_hash,company_id,full_name,role) values ($1,$2,$3,$4,$5) returning *', [email.trim(), hash, cid, name.trim(), role])).rows[0]; }
     catch (e) { if (e.code === '23505') throw bad('That email already has a login. Sign in instead.', 409); throw e; }
     await client.query('commit');
+    audit(req, 'signup', { mode: mode === 'co' ? 'company' : 'driver' }, u);
+    if (mode === 'co' && ctx.billing) ctx.billing.welcome(u, company.trim());
     res.json({ token: sign(u) });
   } catch (e) { await client.query('rollback').catch(() => {}); throw e; } finally { client.release(); }
 }));
 app.post('/api/login', wrap(async (req, res) => {
   const { email, password } = req.body || {};
-  throttle('l' + req.ip + (email || ''));
-  const u = (await q('select * from users where lower(email)=lower($1)', [String(email || '').trim()])).rows[0];
-  if (!u || !u.active || !u.password_hash || !(await bcrypt.compare(String(password || ''), u.password_hash))) throw bad('Wrong email or password', 401);
+  const em = String(email || '').trim().toLowerCase();
+  // lock by FAILURES per email and per address (a stranger can't lock your own device out for long, and can't guess forever)
+  if (tooManyFails('le:' + em, 8) || tooManyFails('li:' + req.ip, 30)) throw bad('Too many wrong tries. Wait 15 minutes, or use Forgot password.', 429);
+  const u = (await q('select * from users where lower(email)=$1', [em])).rows[0];
+  if (!u || !u.active || !u.password_hash || !(await bcrypt.compare(String(password || ''), u.password_hash))) { noteFail('le:' + em); noteFail('li:' + req.ip); if (u) audit(req, 'login_failed', {}, u); throw bad('Wrong email or password', 401); }
   res.json({ token: sign(u) });
 }));
 app.post('/api/login-pin', wrap(async (req, res) => {
@@ -183,14 +218,15 @@ app.post('/api/people/driver', auth, admin, wrap(async (req, res) => {
 app.post('/api/people/:id/pin', auth, admin, wrap(async (req, res) => {
   const u = (await q('select id, full_name from users where id=$1 and company_id=$2', [req.params.id, req.user.company_id])).rows[0]; if (!u) throw bad('Person not found', 404);
   const { pin, h } = await newPin(req.user.company_id);
-  await q('update users set pin_hmac=$1 where id=$2', [h, u.id]); res.json({ id: u.id, name: u.full_name, pin });
+  await q('update users set pin_hmac=$1, token_version=token_version+1 where id=$2', [h, u.id]); audit(req, 'pin_reset', { person: u.full_name }); res.json({ id: u.id, name: u.full_name, pin });
 }));
 app.post('/api/people/:id', auth, admin, wrap(async (req, res) => {
   if (req.params.id === req.user.id) throw bad("You can't change your own access");
   const { role, active } = req.body || {};
   if (role && !['driver', 'admin'].includes(role)) throw bad('Bad role');
   if (role === 'admin' && (await q('select 1 from users where id=$1 and company_id=$2 and email is null', [req.params.id, req.user.company_id])).rowCount) throw bad('Admins need an email and password. Ask them to sign up with the company code first.');
-  await q('update users set role=coalesce($1,role), active=coalesce($2,active) where id=$3 and company_id=$4', [role || null, typeof active === 'boolean' ? active : null, req.params.id, req.user.company_id]); res.json({ ok: true });
+  await q('update users set role=coalesce($1,role), active=coalesce($2,active), token_version=token_version+1 where id=$3 and company_id=$4', [role || null, typeof active === 'boolean' ? active : null, req.params.id, req.user.company_id]);
+  audit(req, 'person_changed', { person: req.params.id, role: role || undefined, active: typeof active === 'boolean' ? active : undefined }); res.json({ ok: true });
 }));
 app.put('/api/company', auth, admin, wrap(async (req, res) => {
   const b = req.body || {}, cur = await getCompany(req.user.company_id), mailOk = /^\S+@\S+\.\S+$/;
@@ -202,24 +238,36 @@ app.put('/api/company', auth, admin, wrap(async (req, res) => {
   await q('update companies set alert_email=$1, billing_email=$2, min_total_secs=$3, check_by=$4, check_days=$5, weekly_report=$6, handover_on=$7 where id=$8',
     [b.alert_email ?? cur.alert_email, b.billing_email ?? cur.billing_email, b.min_total_secs != null ? Math.max(0, Math.min(3600, parseInt(b.min_total_secs) || 0)) : cur.min_total_secs,
       checkBy, days, typeof b.weekly_report === 'boolean' ? b.weekly_report : cur.weekly_report, typeof b.handover_on === 'boolean' ? b.handover_on : cur.handover_on, cur.id]);
-  res.json({ co: coView(await getCompany(cur.id), true) });
+  audit(req, 'settings_changed', { fields: Object.keys(b) }); res.json({ co: coView(await getCompany(cur.id), true) });
 }));
 
 /* ---------- billing ---------- */
 app.get('/api/billing', auth, admin, wrap(async (req, res) => {
   const co = await getCompany(req.user.company_id);
-  const rows = (await q(`select reg, type, added_on as added, removed_on as removed, weeks_in_month(added_on, removed_on, current_date) as weeks from vehicles where company_id=$1 order by reg`, [co.id])).rows.filter(r => r.weeks > 0);
-  const weeks = rows.reduce((a, r) => a + r.weeks, 0);
-  res.json({ usage: { rows, weeks, subtotal: weeks * +co.weekly_price, vat_on: co.vat_on, vat_rate: +co.vat_rate, price: +co.weekly_price }, invoices: (await q('select * from invoices where company_id=$1 order by period desc', [co.id])).rows });
+  // weeks are only charged once the free trial is over
+  const rows = (await q(`select reg, type, added_on as added, removed_on as removed, weeks_in_month(greatest(added_on, coalesce($2::timestamptz::date, added_on)), removed_on, current_date) as weeks from vehicles where company_id=$1 order by reg`, [co.id, co.trial_ends_at])).rows.filter(r => r.weeks > 0);
+  const weeks = rows.reduce((a, r) => a + r.weeks, 0), sub = weeks * +co.weekly_price;
+  res.json({ access: accessOf(co), stripe: ctx.billing ? ctx.billing.configured : false, usage: { rows, weeks, subtotal: sub, vat_on: co.vat_on, vat_rate: +co.vat_rate, price: +co.weekly_price, exempt: co.billing_exempt }, invoices: (await q('select id, number, period, weeks, subtotal, vat, total, status, paid_on, pay_error, lines from invoices where company_id=$1 order by period desc', [co.id])).rows });
 }));
 app.get('/api/invoices/:id', auth, admin, wrap(async (req, res) => { const i = (await q('select * from invoices where id=$1 and company_id=$2', [req.params.id, req.user.company_id])).rows[0]; if (!i) throw bad('Not found', 404); res.json(i); }));
 const lastMonth = () => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 10); };
 app.get('/api/platform', auth, platform, wrap(async (req, res) => res.json({
-  companies: (await q(`select c.id, c.name, c.billing_email, c.weekly_price, c.created_at, c.terms_version, (select count(*) from users u where u.company_id=c.id) people, (select count(*) from vehicles v where v.company_id=c.id and v.removed_on is null) vehicles from companies c order by created_at`)).rows,
+  companies: (await q(`select c.id, c.name, c.billing_email, c.weekly_price, c.created_at, c.terms_version, c.trial_ends_at, c.billing_exempt, (c.card_last4 is not null) has_card, (select count(*) from users u where u.company_id=c.id) people, (select count(*) from vehicles v where v.company_id=c.id and v.removed_on is null) vehicles from companies c order by created_at`)).rows,
   invoices: (await q('select i.*, c.name as company from invoices i join companies c on c.id=i.company_id order by period desc, number desc')).rows })));
-app.post('/api/platform/run-billing', auth, platform, wrap(async (req, res) => res.json({ n: (await q('select generate_invoices($1) n', [req.body.month || lastMonth()])).rows[0].n })));
+app.post('/api/platform/run-billing', auth, platform, wrap(async (req, res) => { const n = (await q('select generate_invoices($1) n', [(req.body || {}).month || lastMonth()])).rows[0].n; if (ctx.billing) await ctx.billing.pushInvoices(); res.json({ n }); }));
 app.post('/api/platform/invoices/:id/paid', auth, platform, wrap(async (req, res) => { await q("update invoices set status='paid', paid_on=current_date where id=$1", [req.params.id]); res.json({ ok: true }); }));
 // the platform owner can set what a customer pays per vehicle per week (default 1)
+// extend (or restart) a free trial, or switch billing off for a company
+app.post('/api/platform/companies/:id/trial', auth, platform, wrap(async (req, res) => {
+  const d = parseInt((req.body || {}).days); if (!(d >= 1 && d <= 365)) throw bad('Enter 1 to 365 days');
+  await q("update companies set trial_ends_at = greatest(coalesce(trial_ends_at, now()), now()) + ($1 || ' days')::interval where id=$2", [String(d), req.params.id]);
+  await q('delete from trial_notices where company_id=$1', [req.params.id]); dropAccess(req.params.id);
+  audit(req, 'trial_extended', { company: req.params.id, days: d }); res.json({ ok: true });
+}));
+app.post('/api/platform/companies/:id/exempt', auth, platform, wrap(async (req, res) => {
+  await q('update companies set billing_exempt=$1 where id=$2', [!!(req.body || {}).exempt, req.params.id]); dropAccess(req.params.id);
+  audit(req, 'billing_exempt', { company: req.params.id, exempt: !!(req.body || {}).exempt }); res.json({ ok: true });
+}));
 app.post('/api/platform/companies/:id/price', auth, platform, wrap(async (req, res) => {
   const p = +(req.body || {}).weekly_price; if (!(p >= 0 && p <= 100)) throw bad('Enter a price between 0 and 100');
   await q('update companies set weekly_price=$1 where id=$2', [p, req.params.id]); res.json({ ok: true });
@@ -227,18 +275,22 @@ app.post('/api/platform/companies/:id/price', auth, platform, wrap(async (req, r
 // Cloud Scheduler hits this on the 1st of each month
 app.post('/api/cron/invoices', wrap(async (req, res) => {
   if (!CRON_SECRET || req.get('x-cron-secret') !== CRON_SECRET) throw bad('No', 403);
-  res.json({ n: (await q('select generate_invoices($1) n', [lastMonth()])).rows[0].n });
+  const n = (await q('select generate_invoices($1) n', [lastMonth()])).rows[0].n; if (ctx.billing) await ctx.billing.pushInvoices(); res.json({ n });
 }));
 app.get('/healthz', (req, res) => res.send('ok'));
 
 /* ---------- feature modules ---------- */
-const ctx = { app, express, pool, q, wrap, bad, auth, admin, platform, getCompany, savePhoto, readPhoto, mail, sendAlerts, config: { CRON_SECRET, APP_URL, TEST_MODE, TERMS_VERSION } };
+const ctx = { app, express, pool, q, wrap, bad, auth, admin, platform, getCompany, savePhoto, readPhoto, deletePhotos, mail, sendAlerts, audit, sign, pub, throttle, tooManyFails, noteFail, dropAccess, coView, sec, config: { CRON_SECRET, APP_URL, TEST_MODE, TERMS_VERSION, PLATFORM_EMAIL } };
 require('./templates')(ctx);
 require('./checks')(ctx);
 require('./defects')(ctx);
 require('./handovers')(ctx);
 require('./jobs')(ctx);
 require('./legal')(ctx);
+require('./billing')(ctx);
+require('./account')(ctx);
+
+app.get('/.well-known/security.txt', (req, res) => res.type('text/plain').send(`Contact: mailto:${process.env.LEGAL_EMAIL || PLATFORM_EMAIL || 'security@example.com'}\nExpires: 2027-12-31T00:00:00.000Z\nPreferred-Languages: en\n`));
 
 /* ---------- static app ---------- */
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
