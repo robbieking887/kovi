@@ -102,3 +102,5 @@ kovifleet.co.uk is served by a Cloudflare Worker (`kovi-edge`) that forwards to 
 
 ## Marketing site and SEO
 `site/` generates ~36 public pages (features, industries, guides, pricing, FAQ, compare, about, security) into `web/.site/`, plus `web/sitemap.xml`, `robots.txt` and `llms.txt`. Edit the copy in `site/content-*.js`, then run `node site/build.js` and commit the output. Each page gets its own title, description, canonical URL, Open Graph tags and JSON-LD (Article, FAQPage, BreadcrumbList, SoftwareApplication). Unknown URLs return a real 404. After a deploy: add kovifleet.co.uk to Google Search Console and submit `/sitemap.xml`.
+
+Printable checklists: `site/checklists-data.js` drives both the web pages and the PDFs in `web/downloads/` (drawn by `site/pdfs.js`). Enquiries from the contact form are stored in the `leads` table, emailed to `LEAD_EMAIL` (falls back to `LEGAL_EMAIL`, then the platform owner), and readable at `GET /api/platform/leads`.

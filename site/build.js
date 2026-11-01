@@ -8,6 +8,13 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 const GROUPS = { 'hgv-walkaround-check-guide': 'Daily checks', 'daily-vehicle-check-checklist-uk': 'Daily checks', 'van-daily-check-checklist': 'Daily checks', 'trailer-walkaround-check-guide': 'Daily checks', 'tyre-checks-for-lorries-and-vans': 'Daily checks', 'common-walkaround-check-mistakes': 'Daily checks', 'how-to-roll-out-daily-checks-to-drivers': 'Daily checks', 'driver-defect-reporting-guide': 'Daily checks', 'how-long-to-keep-walkaround-check-records': 'Legal requirements', 'pmi-vs-daily-walkaround-check': 'Legal requirements', 'how-to-choose-a-vehicle-check-app': 'Running a fleet' };
 for (const p of pages) if (!p.group && p.path.startsWith('/guides/')) p.group = GROUPS[p.path.split('/')[2]];
 const GORDER = ['Daily checks', 'Safety', 'Legal requirements', 'Running a fleet'];
+const CL = require('./checklists-data');
+const PDF = require('./pdfs');
+const clPages = CL.filter(c => !c.pdfOnly).map(c => ({ path: '/checklists/' + c.slug, kind: 'guide', kicker: 'Checklist', nav: c.short || c.title, title: c.title + ' Checklist (Free PDF)', desc: c.desc, h1: c.title + ' checklist', lead: c.intro, dl: '/downloads/' + c.slug + '.pdf',
+  body: (c.sections.map(([h, items]) => `<h2>${esc(h)}</h2><ul>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('') || '') + (c.form ? '<h2>How to use it</h2><ol><li>The driver fills in the top section and describes what is wrong.</li><li>Tick a severity and say if a photo was taken.</li><li>Hand it to the office, who record the action and sign it off.</li><li>File it with the vehicle record.</li></ol>' : '') + `<h2>Do it on your phone instead</h2><p>Paper gets lost and nobody sees it until later. <a href="/features/custom-vehicle-check-templates">Build this as a Kovi template</a> in a few minutes: drivers scan a QR code, tick through it and the office sees defects with photos straight away. Free for 30 days.</p><p class="fine">This is a general checklist. Add anything your manufacturer's handbook, site rules or operator licence requires.</p>`,
+  faq: c.faq || [], related: ['/checklists', '/guides/daily-vehicle-check-checklist-uk', '/features/defect-reporting-with-photos'] }));
+pages.push(...clPages);
+for (const c of CL.filter(c => c.pdfOnly)) { const t = pages.find(p => p.path === c.forPath); if (t) t.dl = '/downloads/' + c.slug + '.pdf'; }
 const byPath = Object.fromEntries(pages.map(p => [p.path, p]));
 const NAV = [['/why-kovi', 'Why Kovi'], ['/features', 'Features'], ['/industries', 'Who it\'s for'], ['/guides', 'Guides'], ['/pricing', 'Pricing']];
 const SECTION_NAMES = { features: 'Features', industries: 'Industries', guides: 'Guides', checklists: 'Checklists', compare: 'Compare' };
@@ -18,7 +25,7 @@ const header = () => `<header class="top"><div class="wrap bar"><a class="logo" 
 const col = (title, prefix, max = 99) => `<div><h4>${title}</h4>${pages.filter(p => p.path.startsWith(prefix) && p.path !== prefix).slice(0, max).map(p => `<a href="${p.path}">${esc(p.nav || p.h1)}</a>`).join('')}${max < 99 ? `<a href="${prefix.slice(0, -1)}"><b>All ${title.toLowerCase()} →</b></a>` : ''}</div>`;
 const footer = () => `<footer class="foot"><div class="wrap fgrid">
 <div><b class="flogo">KOVI</b><p>Daily vehicle walkaround checks for UK fleets. £1 per vehicle per week. 30 days free.</p><a class="btn sm" href="/app?start=trial" data-cta="footer">Start free trial</a></div>
-${col('Features', '/features/')}${col('Who it\'s for', '/industries/')}${col('Guides', '/guides/', 7)}${col('Checklists', '/checklists/')}
+${col('Features', '/features/')}${col('Who it\'s for', '/industries/')}${col('Guides', '/guides/', 7)}${col('Checklists', '/checklists/', 7)}
 <div><h4>Kovi</h4><a href="/pricing">Pricing</a><a href="/why-kovi">Why Kovi</a><a href="/how-it-works">How it works</a><a href="/faq">FAQ</a><a href="/security">Security and data</a><a href="/about">About</a><a href="/contact">Contact</a><a href="/compare/paper-vs-digital-vehicle-checks">Paper vs digital</a><a href="/app">Sign in</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/driver-notice">Driver notice</a></div>
 </div><div class="wrap copy">© ${new Date().getFullYear()} Kovi. Kovi helps you record and manage vehicle checks. You remain responsible for your own legal compliance.</div></footer>`;
 
@@ -64,7 +71,7 @@ function render(p) {
 ${schema(p, url)}
 </head><body>
 ${header()}
-<main><section class="phead"><div class="wrap narrowish"><p class="eyebrow">${esc(p.kicker || '')}</p><h1>${esc(p.h1)}</h1>${p.lead ? `<p class="lead">${esc(p.lead)}</p>` : ''}${meta}${p.hero ? `<p><a class="btn big" href="/app?start=trial" data-cta="hero-${esc(p.path.replace(/\W+/g, '-').slice(1))}">Start your 30-day free trial</a></p><p class="fine light">No card needed · £1 per vehicle per week after</p>` : ''}</div></section>
+<main><section class="phead"><div class="wrap narrowish"><p class="eyebrow">${esc(p.kicker || '')}</p><h1>${esc(p.h1)}</h1>${p.lead ? `<p class="lead">${esc(p.lead)}</p>` : ''}${meta}${p.dl ? `<p><a class="btn big" href="${p.dl}" download data-cta="dl">Download the printable PDF</a></p>` : ''}${p.hero ? `<p><a class="btn big" href="/app?start=trial" data-cta="hero-${esc(p.path.replace(/\W+/g, '-').slice(1))}">Start your 30-day free trial</a></p><p class="fine light">No card needed · £1 per vehicle per week after</p>` : ''}</div></section>
 ${nav}
 <article class="wrap narrowish prose">${p.body}${hubList(p)}${p.img ? `<figure class="shotfig"><img src="${p.img}" alt="${esc(p.imgAlt || '')}" loading="lazy" width="390" height="800"><figcaption>Example data</figcaption></figure>` : ''}${faqHtml(p)}${related(p)}</article>
 </main>
@@ -87,4 +94,4 @@ fs.writeFileSync(path.join(WEB, 'sitemap.xml'), `<?xml version="1.0" encoding="U
 fs.writeFileSync(path.join(WEB, 'robots.txt'), `User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /api/\nDisallow: /v/\n\nSitemap: ${ORIGIN}/sitemap.xml\n`);
 fs.writeFileSync(path.join(WEB, 'llms.txt'), `# Kovi\n> Kovi is daily vehicle walkaround check software for UK fleets. Drivers scan a QR code on the vehicle, complete the check on their phone and report defects with photos. Offices see every check, defect and missed vehicle live. £1 per vehicle per week, 30 day free trial with no card.\n\n${urls.map(p => `- [${p.nav || p.h1}](${ORIGIN}${p.path}): ${p.desc}`).join('\n')}\n`);
 fs.writeFileSync(path.join(OUT, '_urls.json'), JSON.stringify(urls.map(p => p.path)));
-console.log(urls.length + ' pages, sitemap, robots, llms.txt written');
+(async () => { fs.mkdirSync(path.join(WEB, 'downloads'), { recursive: true }); for (const c of CL) await PDF(c, path.join(WEB, 'downloads', c.slug + '.pdf')); console.log(urls.length + ' pages, ' + CL.length + ' PDFs, sitemap, robots, llms.txt written'); })();

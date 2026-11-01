@@ -182,5 +182,14 @@ async function call(method, url, { token, body, ip, headers } = {}) {
   r = await call('GET', '/guides/hgv-walkaround-check-guide'); ok(txt(r.d).includes('"@type":"Article"') && txt(r.d).includes('"@type":"FAQPage"') && txt(r.d).includes('BreadcrumbList'), 'guides carry Article, FAQ and breadcrumb structured data');
   r = await call('GET', '/app'); ok(txt(r.d).includes('core.js'), '/app still serves the app');
 
+  console.log('enquiry form + downloads');
+  r = await call('POST', '/api/lead', { body: { name: '', email: 'x' } }); ok(r.s === 400, 'enquiry needs a name and valid email');
+  r = await call('POST', '/api/lead', { body: { name: 'Test Haulier', email: `lead${stamp}@t.co`, company: 'T Haulage', fleet_size: '6 to 20', message: 'hi', source: '/contact' } }); ok(r.s === 200 && r.d.ok, 'enquiry accepted');
+  ok(sql(`select count(*) from leads where email = 'lead${stamp}@t.co'`) === '1', 'enquiry stored');
+  r = await call('POST', '/api/lead', { body: { name: 'Bot', email: 'bot@t.co', website: 'http://spam' } }); ok(r.s === 200 && sql(`select count(*) from leads where email = 'bot@t.co'`) === '0', 'honeypot enquiries are dropped');
+  r = await call('GET', '/downloads/hgv-daily-check-sheet.pdf'); ok(r.s === 200 && Buffer.from(r.d).slice(0, 4).toString() === '%PDF', 'printable checklist PDF downloads');
+  r = await call('GET', '/api/platform/leads', { token: A }); ok(r.s === 403, 'customers cannot read enquiries');
+  r = await call('GET', '/api/platform/leads', { token: P }); ok(r.s === 200 && r.d.some(l => l.email === `lead${stamp}@t.co`), 'platform owner can read enquiries');
+
   console.log(`\n${pass} passed, ${failed} failed`); process.exit(failed ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(1); });

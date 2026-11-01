@@ -29,3 +29,9 @@ footer.foot .copy{display:block;padding-top:16px;flex-wrap:initial}
 .chk{list-style:none;padding:0;margin:0}.chk li{padding:7px 0 7px 26px;position:relative;font-size:16px;color:var(--mut);border-top:1px solid var(--line)}.chk li:first-child{border-top:0}.chk li:before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:900}.chk b{color:var(--ink)}
 .ghost.dark{color:var(--ink);border-bottom-color:var(--acc);margin-left:14px}
 @media(max-width:860px){.whygrid{grid-template-columns:1fr}}
+
+.leadform{display:grid;gap:12px;margin:18px 0}.leadform label{font-size:14px;font-weight:700;display:grid;gap:5px}.leadform input,.leadform select,.leadform textarea{font:inherit;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}.leadform textarea{min-height:110px}
+.leadform .two2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.leadform .hp{position:absolute;left:-9999px;opacity:0}
+.leadform button{border:0;cursor:pointer;font:inherit;font-weight:800}.leadmsg{font-weight:700}.leadmsg.good{color:var(--ok)}.leadmsg.bad{color:#c0392b}
+@media(max-width:560px){.leadform .two2{grid-template-columns:1fr}}
+.dlbox{background:var(--alt);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin:18px 0}
