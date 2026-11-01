@@ -123,3 +123,7 @@ header{background:linear-gradient(90deg,#0b1118,#141c27)}
 .ok{background:var(--pillokbg);color:var(--pilloktxt);border-radius:12px;padding:12px 14px;font-size:14px;margin:10px 0}
 .ok .b.sm,.warn .b.sm{min-height:36px;padding:0 14px;font-size:14px}
 .danger{border:1.5px solid var(--bad)}
+
+.ob .bar{height:8px;border-radius:99px;background:var(--line);margin:10px 0 6px;overflow:hidden}.ob .bar i{display:block;height:100%;background:var(--ok);border-radius:99px;transition:width .3s}
+.obs{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}.obs:first-of-type{border-top:0}.obs .t{flex:1;min-width:0}
+.obs .tick{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px;background:var(--line);color:var(--mut)}.obs.done .tick{background:var(--ok);color:#fff}.obs.done .t{color:var(--mut);text-decoration:line-through}

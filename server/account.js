@@ -15,7 +15,7 @@ module.exports = function account(ctx) {
     if (u && u.active && u.password_hash) {
       const token = crypto.randomBytes(32).toString('hex');
       await q("insert into password_resets(token_hash, user_id, expires_at) values ($1,$2, now() + interval '1 hour')", [sec.sha256(token), u.id]);
-      await mail.sendMail({ to: u.email, subject: 'Reset your Kovi password', text: `Hi ${u.full_name || ''},\n\nUse this link within 1 hour to choose a new password:\n${APP}/#reset=${token}\n\nIf you did not ask for this you can ignore this email. Your password has not changed.\nKovi` });
+      await mail.sendMail({ to: u.email, subject: 'Reset your Kovi password', text: `Hi ${u.full_name || ''},\n\nUse this link within 1 hour to choose a new password:\n${APP}/app#reset=${token}\n\nIf you did not ask for this you can ignore this email. Your password has not changed.\nKovi` });
       audit(req, 'reset_requested', {}, u);
       if (ctx.config.TEST_MODE) return res.json({ ok: true, dev_token: token });   // tests only: there is no inbox to read
     }

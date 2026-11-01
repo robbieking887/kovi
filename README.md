@@ -96,3 +96,6 @@ Tests: `node tests/api.js`, `node tests/launch.js` (fake Stripe on :8098), `node
 
 ## Domain
 kovifleet.co.uk is served by a Cloudflare Worker (`kovi-edge`) that forwards to Cloud Run (Cloud Run can't map domains in europe-west2). The worker adds an `x-kovi-edge` secret so the server trusts the visitor IP it passes on (env `EDGE_SECRET`). Stripe webhook URL: https://kovifleet.co.uk/api/stripe/webhook
+
+## Sales page and onboarding
+`/` is the sales page (`web/welcome.html`, `landing.css`, `landing.js`): hero, 3-step demo with example screenshots, features, pricing, FAQ, and "Start your 30-day free trial" buttons that go to `/app?start=trial` (opens the company sign-up form). The app itself lives at `/app` (QR links `/v/<id>` still work). After sign-up the office sees a "Get started" checklist (vehicles, drivers, first check, card) and gets three onboarding emails (days 1, 3, 6). Button clicks are logged as `landing_cta` lines in the server log. The demo screenshots in `web/img/` are staged example data.

@@ -44,7 +44,7 @@ module.exports = function billing(ctx) {
   app.post('/api/billing/card', auth, admin, wrap(async (req, res) => {
     const co = await getCompany(req.user.company_id), cid = await ensureCustomer(co, req.user.email);
     const s = await stripe('POST', '/checkout/sessions', { mode: 'setup', customer: cid, currency: 'gbp', payment_method_types: { 0: 'card' },
-      success_url: APP + '/?card=ok', cancel_url: APP + '/?card=cancel', metadata: { kovi_company: co.id } });
+      success_url: APP + '/app?card=ok', cancel_url: APP + '/app?card=cancel', metadata: { kovi_company: co.id } });
     res.json({ url: s.url });
   }));
   app.post('/api/billing/card/sync', auth, admin, wrap(async (req, res) => {
@@ -85,7 +85,7 @@ module.exports = function billing(ctx) {
 
   /* ---------- turning Kovi invoices into card charges ---------- */
   async function failedMail(inv) {
-    await mail.sendMail({ to: inv.billing_email, subject: `Kovi: card payment for ${inv.number} failed`, text: `We could not take ${money(inv.total)} for invoice ${inv.number} from the card on file for ${inv.cname}.\n\nPlease open Kovi > Billing and add a new card. We will try again straight away.\n${APP}` });
+    await mail.sendMail({ to: inv.billing_email, subject: `Kovi: card payment for ${inv.number} failed`, text: `We could not take ${money(inv.total)} for invoice ${inv.number} from the card on file for ${inv.cname}.\n\nPlease open Kovi > Billing and add a new card. We will try again straight away.\n${APP}/app` });
   }
   async function pushOne(inv, co) {
     try {
@@ -124,7 +124,7 @@ module.exports = function billing(ctx) {
       const co = await getCompany(inv.company_id); if (!co) continue;
       if (configured && co.card_last4) await pushOne(inv, co);
       else if (!inv.pay_error) {
-        const sent = await mail.sendMail({ to: co.billing_email, subject: `Kovi invoice ${inv.number}: ${money(inv.total)}`, text: `Your Kovi invoice ${inv.number} for ${co.name} is ready: ${inv.weeks} vehicle-weeks, total ${money(inv.total)}${+inv.vat ? ' including VAT' : ''}.\n\nThe easiest way to pay is to add a card in Kovi > Billing, and we will take it automatically each month.\n${APP}` });
+        const sent = await mail.sendMail({ to: co.billing_email, subject: `Kovi invoice ${inv.number}: ${money(inv.total)}`, text: `Your Kovi invoice ${inv.number} for ${co.name} is ready: ${inv.weeks} vehicle-weeks, total ${money(inv.total)}${+inv.vat ? ' including VAT' : ''}.\n\nThe easiest way to pay is to add a card in Kovi > Billing, and we will take it automatically each month.\n${APP}/app` });
         if (sent || !mail.enabled) await q("update invoices set pay_error='Waiting for a card' where id=$1", [inv.id]);
       }
     }
@@ -132,7 +132,7 @@ module.exports = function billing(ctx) {
 
   /* ---------- emails around the trial ---------- */
   async function welcome(user, companyName) {
-    await mail.sendMail({ to: user.email, subject: 'Welcome to Kovi: your 30 day free trial has started', text: `Hi ${user.full_name},\n\nYour 30 day free trial for ${companyName} is live. No card needed.\n\nQuick start:\n1. Add your vehicles (Vehicles tab) and print their QR codes.\n2. Add your drivers (People tab). They sign in with a 6 digit PIN.\n3. Stick the QR codes in the cabs. Drivers scan, tick, done.\n\nAfter the trial it is £1 per vehicle per week (plus VAT if applicable). Add a card in Billing any time to carry on without a break.\n\n${APP}\n\nAny questions, just reply to this email.\nKovi` });
+    await mail.sendMail({ to: user.email, subject: 'Welcome to Kovi: your 30 day free trial has started', text: `Hi ${user.full_name},\n\nYour 30 day free trial for ${companyName} is live. No card needed.\n\nQuick start:\n1. Add your vehicles (Vehicles tab) and print their QR codes.\n2. Add your drivers (People tab). They sign in with a 6 digit PIN.\n3. Stick the QR codes in the cabs. Drivers scan, tick, done.\n\nAfter the trial it is £1 per vehicle per week (plus VAT if applicable). Add a card in Billing any time to carry on without a break.\n\n${APP}/app\n\nAny questions, just reply to this email.\nKovi` });
     if (ctx.config.PLATFORM_EMAIL) await mail.sendMail({ to: ctx.config.PLATFORM_EMAIL, subject: `Kovi: new trial, ${companyName}`, text: `${companyName} just signed up (${user.email}). Trial ends in 30 days.` });
   }
   const TRIAL_MAIL = {
@@ -147,11 +147,41 @@ module.exports = function billing(ctx) {
       const stage = a.state === 'locked' ? -1 : a.state === 'grace' ? 0 : left <= 1 ? 1 : left <= 7 ? 7 : null;
       if (stage === null) continue;
       const got = await q('insert into trial_notices(company_id, stage) values ($1,$2) on conflict do nothing returning 1', [co.id, stage]);
-      if (got.rowCount) { const [subject, body] = TRIAL_MAIL[stage]; await mail.sendMail({ to: co.billing_email || co.alert_email, subject, text: `${body(co.name)}\n\n${APP}` }); }
+      if (got.rowCount) { const [subject, body] = TRIAL_MAIL[stage]; await mail.sendMail({ to: co.billing_email || co.alert_email, subject, text: `${body(co.name)}\n\n${APP}/app` }); }
     }
   }
-  async function tick() { try { await trialNotices(); await pushInvoices(); } catch (e) { console.error('billing tick', e.message); } }
+  /* ---------- getting started: the checklist in the app and the follow-up emails ---------- */
+  async function progress(cid) {
+    const r = (await q(`select (select count(*) from vehicles where company_id=$1 and removed_on is null)::int vehicles,
+      (select count(*) from users where company_id=$1 and role='driver' and active)::int drivers,
+      (select count(*) from checks where company_id=$1)::int checks,
+      (select count(*) from defects where company_id=$1)::int defects`, [cid])).rows[0];
+    return r;
+  }
+  app.get('/api/onboarding', auth, admin, wrap(async (req, res) => {
+    const co = await getCompany(req.user.company_id), p = await progress(co.id);
+    res.json({ dismissed: co.onboarding_dismissed, ...p, has_card: !!co.card_last4, trial: co.trial_ends_at ? accessOf(co) : null });
+  }));
+  app.post('/api/onboarding/dismiss', auth, admin, wrap(async (req, res) => { await q('update companies set onboarding_dismissed=true where id=$1', [req.user.company_id]); res.json({ ok: true }); }));
+  const NEXT = p => p.vehicles === 0 ? ['Add your first vehicle', 'Open Kovi > Vehicles, type the reg and tap Add. It takes 30 seconds.']
+    : p.drivers === 0 ? ['Add your drivers', 'Open Kovi > People > Add driver. Each driver gets a 6 digit PIN, no email or password needed. Print the QR codes from Vehicles and stick them in the cabs.']
+    : p.checks === 0 ? ['Do your first check', 'Scan a vehicle QR code (or tap Check in the app) and run through it. Most drivers finish in about a minute.']
+    : ['Make it yours', 'Open Kovi > Checklists to customise what drivers tick, and Settings to choose who gets alerts and a "who has not checked" reminder.'];
+  async function onboardingMail() {
+    const { rows } = await q("select * from companies where trial_ends_at is not null and not billing_exempt and not onboarding_dismissed and created_at > now() - interval '30 days'");
+    for (const co of rows) {
+      const age = (Date.now() - new Date(co.created_at)) / 864e5, stage = age >= 14 ? 103 : age >= 4 ? 102 : age >= 1 ? 101 : null;
+      if (!stage || !(co.billing_email || co.alert_email)) continue;
+      const got = await q('insert into trial_notices(company_id, stage) values ($1,$2) on conflict do nothing returning 1', [co.id, stage]); if (!got.rowCount) continue;
+      const p = await progress(co.id), [title, how] = NEXT(p); let subject, body;
+      if (stage === 101) { subject = p.checks ? 'Kovi: nice start. What next?' : 'Kovi: ' + title; body = `Your trial for ${co.name} is under way.\n\nNext step: ${title}.\n${how}`; }
+      else if (stage === 102) { subject = p.checks ? 'Kovi: three things worth switching on' : 'Kovi: need a hand getting started?'; body = p.checks ? `You are up and running. Three things worth switching on:\n- Missed-check alerts (Settings): get an email if a vehicle has not been checked by a time you choose.\n- Dates (Vehicles): add MOT, tax and service dates and Kovi reminds you.\n- Your own checklist (Checklists).` : `You have not run a check yet, and that is the whole point of Kovi, so let us help. Just reply to this email and we will get you set up. Otherwise: ${title}. ${how}`; }
+      else { subject = `Kovi: halfway through your trial (${p.checks} checks so far)`; body = `Halfway through the trial for ${co.name}: ${p.vehicles} vehicles, ${p.checks} checks done, ${p.defects} defects logged.\n\n${p.checks ? 'To keep it running after the trial, add a card in Kovi > Billing. It is £1 per vehicle per week, charged monthly.' : title + '. ' + how}`; }
+      await mail.sendMail({ to: co.billing_email || co.alert_email, subject, text: `${body}\n\n${APP}/app\n\nAny question, just reply to this email.\nKovi` });
+    }
+  }
+  async function tick() { try { await trialNotices(); await onboardingMail(); await pushInvoices(); } catch (e) { console.error('billing tick', e.message); } }
 
   async function deleteCustomer(id) { if (!configured || !id) return; try { await stripe('DELETE', '/customers/' + id); } catch (e) { console.error('stripe delete', e.message); } }
-  ctx.billing = { configured, deleteCustomer, welcome, tick, pushInvoices, syncCard, verify };
+  ctx.billing = { configured, progress, deleteCustomer, welcome, tick, pushInvoices, syncCard, verify };
 };

@@ -20,12 +20,27 @@ K.views.today = async function () {
   const [checks, vs] = await Promise.all([api('GET', '/api/checks/today?since=' + encodeURIComponent(dayStart())), K.vehicles()]);
   const done = new Set(); checks.forEach(c => { done.add(c.vehicle_id); if (c.trailer_id) done.add(c.trailer_id); });
   const missing = vs.filter(v => v.daily_check && !done.has(v.id));
-  const co = S.co;
-  return `<h1>Today</h1>
+  const co = S.co, ob = await api('GET', '/api/onboarding').catch(() => null);
+  return `<h1>Today</h1>${K.onboardCard(ob)}
   ${co.check_by ? `<p class="mut">You will be alerted if vehicles are not checked by ${esc(co.check_by)}.</p>` : `<p class="mut">Set a "check by" time in Settings to be alerted when vehicles have not been checked.</p>`}
   <div class="card"><h2>Not checked yet <span class="pill ${missing.length ? 'warn' : 'ok'}">${missing.length}</span></h2>${missing.map(v => `<div class="item"><div class="t"><b>${esc(v.reg)}</b> <span class="mut">${esc(v.type)}</span></div></div>`).join('') || '<p class="mut">Every vehicle has been checked today.</p>'}</div>
   <div class="card"><h2>Checks today <span class="pill">${checks.length}</span></h2>${checks.map(checkRow).join('') || '<p class="mut">None yet.</p>'}</div>`;
 };
+/* first-run checklist: ticks itself off as the company does each thing */
+K.onboardCard = ob => {
+  if (!ob || ob.dismissed) return '';
+  const steps = [[ob.vehicles > 0, 'Add your first vehicle', 'Type the reg, tap Add, then print its QR code for the cab.', 'vehicles', 'Add vehicle'],
+    [ob.drivers > 0, 'Add a driver', 'They sign in with a 6 digit PIN. No email or password.', 'people', 'Add driver'],
+    [ob.checks > 0, 'Do your first check', 'Tap Check and run through it yourself. It takes about a minute.', 'home', 'Start a check']];
+  if (!K.native && ob.trial && ob.trial.state === 'trial') steps.push([ob.has_card, 'Add a card before the trial ends', `Free for ${ob.trial.days_left} more day${ob.trial.days_left === 1 ? '' : 's'}. Nothing is charged until then.`, 'billing', 'Add card']);
+  const n = steps.filter(x => x[0]).length, next = steps.findIndex(x => !x[0]);
+  if (n === steps.length) return `<div class="ok" style="display:flex;gap:8px;align-items:center"><span style="flex:1"><b>You're all set up.</b> Kovi will email you about defects and missed checks.</span><button class="b sm" data-a="obhide">Hide</button></div>`;
+  return `<div class="card ob"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2 style="margin:0">Get started</h2><span class="mut">${n} of ${steps.length} done</span></div>
+  <div class="bar"><i style="width:${Math.round(n / steps.length * 100)}%"></i></div>
+  ${steps.map((x, i) => `<div class="obs ${x[0] ? 'done' : ''}"><span class="tick">${x[0] ? '✓' : i + 1}</span><div class="t"><b>${x[1]}</b>${x[0] ? '' : `<div class="mut">${x[2]}</div>`}</div>${!x[0] && i === next ? `<button class="b sm" data-a="tab" data-v="${x[3]}">${x[4]}</button>` : ''}</div>`).join('')}
+  <p class="mut" style="margin:8px 0 0"><a href="#" data-a="obhide">Hide this</a></p></div>`;
+};
+K.actions.obhide = () => K.run(async () => { await api('POST', '/api/onboarding/dismiss'); });
 K.actions.open = (el, d) => { S.cache.back = S.view; S.cache.open = d.id; S.view = 'detail'; K.render(); };
 
 /* ================= one check, in full ================= */

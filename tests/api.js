@@ -162,5 +162,13 @@ async function call(method, url, { token, body, ip, headers } = {}) {
   ok(last.s === 429, 'after repeated wrong PINs from one address it is blocked');
   r = await call('POST', '/api/login-pin', { body: { code: co.join_code, pin: NEWPIN }, ip: '10.8.8.8' }); ok(r.s === 200, 'a driver at another address can still sign in');
 
+  console.log('landing page + onboarding');
+  r = await call('GET', '/'); ok(r.s === 200 && Buffer.from(r.d).toString().includes('30-day free trial') && Buffer.from(r.d).toString().includes('/app?start=trial'), 'home page is the sales page with the trial button');
+  r = await call('GET', '/app'); ok(r.s === 200 && Buffer.from(r.d).toString().includes('core.js'), '/app serves the app');
+  r = await call('GET', '/v/abc'); ok(r.s === 200 && Buffer.from(r.d).toString().includes('core.js'), 'QR links still open the app');
+  r = await call('POST', '/api/hit?c=hero'); ok(r.s === 204, 'button click count accepted');
+  r = await call('GET', '/api/onboarding', { token: A }); ok(r.s === 200 && r.d.vehicles === 3 && r.d.dismissed === false, 'onboarding progress counts what the company has done');
+  r = await call('POST', '/api/onboarding/dismiss', { token: A }); r = await call('GET', '/api/onboarding', { token: A }); ok(r.d.dismissed === true, 'checklist can be hidden');
+
   console.log(`\n${pass} passed, ${failed} failed`); process.exit(failed ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(1); });

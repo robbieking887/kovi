@@ -237,3 +237,5 @@ begin
 end $$;
 
 alter table checks add column if not exists plate_text text;   -- reg typed in by the driver instead of (or as well as) a photo
+
+alter table companies add column if not exists onboarding_dismissed boolean not null default false;

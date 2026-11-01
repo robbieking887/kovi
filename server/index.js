@@ -267,7 +267,7 @@ app.post('/api/platform/invoices/:id/paid', auth, platform, wrap(async (req, res
 app.post('/api/platform/companies/:id/trial', auth, platform, wrap(async (req, res) => {
   const d = parseInt((req.body || {}).days); if (!(d >= 1 && d <= 365)) throw bad('Enter 1 to 365 days');
   await q("update companies set trial_ends_at = greatest(coalesce(trial_ends_at, now()), now()) + ($1 || ' days')::interval where id=$2", [String(d), req.params.id]);
-  await q('delete from trial_notices where company_id=$1', [req.params.id]); dropAccess(req.params.id);
+  await q('delete from trial_notices where company_id=$1 and stage < 100', [req.params.id]); dropAccess(req.params.id);
   audit(req, 'trial_extended', { company: req.params.id, days: d }); res.json({ ok: true });
 }));
 app.post('/api/platform/companies/:id/exempt', auth, platform, wrap(async (req, res) => {
@@ -299,8 +299,11 @@ require('./account')(ctx);
 app.get('/.well-known/security.txt', (req, res) => res.type('text/plain').send(`Contact: mailto:${process.env.LEGAL_EMAIL || PLATFORM_EMAIL || 'security@example.com'}\nExpires: 2027-12-31T00:00:00.000Z\nPreferred-Languages: en\n`));
 
 /* ---------- static app ---------- */
+const hits = {};   // landing-page button counts since the last restart; just a log line, no cookies or personal data
+app.post('/api/hit', (req, res) => { const c = String(req.query.c || '').replace(/[^a-z]/g, '').slice(0, 12); if (c) { hits[c] = (hits[c] || 0) + 1; console.log('landing_cta', c, hits[c]); } res.status(204).end(); });
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
-app.use(express.static(path.join(__dirname, '..', 'web'), { setHeaders: (res, p) => { if (/sw\.js$|index\.html$/.test(p)) res.set('Cache-Control', 'no-cache'); } }));
+app.get('/', (req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, '..', 'web', 'welcome.html')));   // the sales page; the app lives at /app
+app.use(express.static(path.join(__dirname, '..', 'web'), { index: false, setHeaders: (res, p) => { if (/sw\.js$|index\.html$/.test(p)) res.set('Cache-Control', 'no-cache'); } }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '..', 'web', 'index.html')));
 
 (async () => {

@@ -4,7 +4,8 @@
   S.authMode = K.lsGet('kovi_code') ? 'pin' : 'in';
   const rs = location.hash.match(/^#reset=([0-9a-f]{64})$/);                 // password reset link from the email
   if (rs) { K.setToken(''); S.resetToken = rs[1]; S.authMode = 'reset'; history.replaceState(null, '', '/'); }
-  const back = new URLSearchParams(location.search).get('card');             // coming back from Stripe's card page
+  const back = new URLSearchParams(location.search).get('card');
+  if (new URLSearchParams(location.search).get('start') === 'trial' && !K.token) { S.authMode = 'co'; history.replaceState(null, '', '/app'); }             // coming back from Stripe's card page
   if (back) history.replaceState(null, '', location.pathname);
   try { if (back === 'ok' && K.token) { await K.api('POST', '/api/billing/card/sync'); } } catch (e) {}
   try { await K.loadMe(); } catch (e) { S.err = 'No signal and nothing saved on this phone yet.'; }
